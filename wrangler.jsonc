@@ -23,6 +23,7 @@
       "database_id": "6bab3e4d-7447-489f-905f-408659c434ca"
     }
   ],
+  "minify": true,
   "observability": {
     "enabled": true
   }
