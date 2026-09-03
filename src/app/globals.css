@@ -1,0 +1,345 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ================================================================== */
+/* QTB DEV TOOLS — design system additions                             */
+/* ================================================================== */
+
+@property --qtb-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* Animated rainbow conic-gradient glow border.
+   Wrap a button/panel in a <span class="qtb-glow rounded-xl"> layer; the
+   ::before is a soft blurred aura, ::after a crisp ring peeking out -2px. */
+.qtb-glow {
+  position: relative;
+  display: inline-flex;
+  isolation: isolate;
+}
+.qtb-glow::before,
+.qtb-glow::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--qtb-angle, 0deg),
+    #f59e0b,
+    #f97316,
+    #ec4899,
+    #d946ef,
+    #8b5cf6,
+    #10b981,
+    #f59e0b
+  );
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.qtb-glow::before {
+  z-index: -1;
+  filter: blur(9px);
+}
+.qtb-glow::after {
+  z-index: 0;
+}
+.qtb-glow:hover::before,
+.qtb-glow:focus-within::before,
+.qtb-glow:hover::after,
+.qtb-glow:focus-within::after {
+  opacity: 1;
+  animation: qtb-angle-spin 3s linear infinite;
+}
+@keyframes qtb-angle-spin {
+  to {
+    --qtb-angle: 360deg;
+  }
+}
+
+/* Transform-based rotation (spinners, sparks). */
+@keyframes qtb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Colorful donut spinner. */
+.qtb-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: conic-gradient(#f59e0b, #ec4899, #8b5cf6, #10b981, #f59e0b);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px));
+  animation: qtb-spin 0.9s linear infinite;
+}
+
+/* Custom scrollbar (gradient thumb) — apply .qtb-scroll on scroll containers. */
+.qtb-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #d4d4d8 transparent;
+}
+.qtb-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.qtb-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.qtb-scroll::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  border: 2px solid #ffffff;
+  background: linear-gradient(180deg, #f59e0b, #d946ef, #8b5cf6, #10b981);
+}
+.qtb-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #d97706, #c026d3, #7c3aed, #059669);
+}
+
+/* Aurora blobs — pair with bg-<color>-300/40 + rounded-full, low opacity. */
+.qtb-aurora {
+  filter: blur(90px);
+  will-change: transform;
+  animation: qtb-aurora-drift 14s ease-in-out infinite;
+}
+.qtb-aurora-alt {
+  filter: blur(110px);
+  will-change: transform;
+  animation: qtb-aurora-drift-alt 18s ease-in-out infinite;
+}
+@keyframes qtb-aurora-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(48px, -36px) scale(1.15);
+  }
+  66% {
+    transform: translate(-32px, 24px) scale(0.92);
+  }
+}
+@keyframes qtb-aurora-drift-alt {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  50% {
+    transform: translate(-56px, 32px) scale(1.2) rotate(12deg);
+  }
+}
+
+/* Checkerboard backdrop for transparent PNG previews. */
+.qtb-checker {
+  background-color: #fafafa;
+  background-image:
+    linear-gradient(45deg, #e9e9eb 25%, transparent 25%),
+    linear-gradient(-45deg, #e9e9eb 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e9e9eb 75%),
+    linear-gradient(-45deg, transparent 75%, #e9e9eb 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+}
+
+/* Announcement marquee. */
+.qtb-marquee {
+  animation: qtb-marquee-slide 22s linear infinite;
+}
+@keyframes qtb-marquee-slide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Shimmer bar for in-flight AI jobs. */
+.qtb-shimmer {
+  background: linear-gradient(90deg, #f4f4f5 25%, #fbe8ff 50%, #fff4d6 75%, #f4f4f5 100%);
+  background-size: 200% 100%;
+  animation: qtb-shimmer-slide 1.4s linear infinite;
+}
+@keyframes qtb-shimmer-slide {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Smooth, colorful focus rings for inputs & interactive elements. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 0 0 5px rgba(217, 70, 239, 0.35);
+}
+
+
+/* ------------------------------------------------------------------ */
+/* RTL / Arabic locale support                                         */
+/* ------------------------------------------------------------------ */
+
+/* Arabic UI font: swap Geist for Noto Kufi Arabic when dir=rtl. */
+[dir="rtl"] body,
+[dir="rtl"] input,
+[dir="rtl"] textarea,
+[dir="rtl"] select,
+[dir="rtl"] button {
+  font-family: var(--font-arabic), var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Keep latin-only brand marks (logo wordmark, mono IDs, code) LTR inside RTL pages. */
+[dir="rtl"] .qtb-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Emails & phone numbers must read LTR even in Arabic UI. */
+[dir="rtl"] .qtb-ltr-force {
+  direction: ltr !important;
+  unicode-bidi: bidi-override;
+}
+
+/* Flip physical icon margins used across the app (icon after text patterns). */
+[dir="rtl"] .qtb-flip {
+  transform: scaleX(-1);
+}
+
+/* Scrollbars keep native side, but avoid padding jumps on the html element. */
+[dir="rtl"] html {
+  scrollbar-gutter: stable;
+}
