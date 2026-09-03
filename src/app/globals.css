@@ -343,3 +343,15 @@ a:focus-visible,
 [dir="rtl"] html {
   scrollbar-gutter: stable;
 }
+
+/* Splash loading bar (page.tsx dynamic shell) */
+@keyframes qtb-loading-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+.qtb-loading-bar {
+  animation: qtb-loading-slide 1.1s ease-in-out infinite;
+}
+[dir="rtl"] .qtb-loading-bar {
+  animation-direction: reverse;
+}
