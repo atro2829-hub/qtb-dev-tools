@@ -129,3 +129,72 @@ export async function zaiImageEdit(body: {
   )) as unknown as ZaiImageEditResult
   return result
 }
+
+/** Gemini image models to try, in order (image generation/editing capable). */
+const GEMINI_IMAGE_MODELS = ['gemini-2.5-flash-image', 'gemini-2.5-flash-image-preview']
+
+export interface GeminiImageResult {
+  base64: string
+  mimeType: string
+}
+
+/**
+ * Image editing via the Gemini image models (used on the Workers deployment,
+ * where the ZAI internal API is not reachable). Returns the first inline image
+ * found in the response.
+ */
+export async function geminiImageEdit(
+  apiKey: string,
+  prompt: string,
+  imageDataUrl: string
+): Promise<GeminiImageResult> {
+  const marker = 'base64,'
+  const commaIdx = imageDataUrl.indexOf(marker)
+  const mimeType = commaIdx > 0 ? imageDataUrl.slice(5, commaIdx - 7) : 'image/jpeg'
+  const base64Data = commaIdx > 0 ? imageDataUrl.slice(commaIdx + marker.length) : imageDataUrl
+
+  let lastError = 'Gemini image edit failed'
+  for (const model of GEMINI_IMAGE_MODELS) {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: prompt },
+                { inlineData: { mimeType, data: base64Data } },
+              ],
+            },
+          ],
+        }),
+      }
+    )
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      lastError = `Gemini API error ${res.status}: ${body.slice(0, 300)}`
+      continue // try next model
+    }
+    const json = (await res.json()) as {
+      candidates?: Array<{
+        content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string }; inline_data?: { mime_type?: string; data?: string } }> }
+      }>
+    }
+    const parts = json.candidates?.[0]?.content?.parts ?? []
+    for (const part of parts) {
+      const inline = part.inlineData ?? part.inline_data
+      const data = (inline as { data?: string } | undefined)?.data
+      if (data) {
+        const mime =
+          (inline as { mimeType?: string; mime_type?: string }).mimeType ??
+          (inline as { mime_type?: string }).mime_type ??
+          'image/png'
+        return { base64: data, mimeType: mime }
+      }
+    }
+    lastError = 'Gemini returned no image data'
+  }
+  throw new Error(lastError)
+}

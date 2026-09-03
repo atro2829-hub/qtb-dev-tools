@@ -1,4 +1,4 @@
-import { zaiImageEdit } from '@/lib/server/zai'
+import { geminiImageEdit, zaiImageEdit } from '@/lib/server/zai'
 import { getSessionUser, unauthorized } from '@/lib/auth'
 import { enforceQuota } from '@/lib/server/quota'
 import { db } from '@/lib/db'
@@ -43,13 +43,23 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(await file.arrayBuffer())
     const dataUrl = `data:${file.type};base64,${buffer.toString('base64')}`
 
-    const result = await zaiImageEdit({
-      prompt: PROMPT,
-      images: [{ url: dataUrl }],
-      size: '1024x1024',
-    })
-
-    const base64 = result?.data?.[0]?.base64
+    // The ZAI internal API is unreachable from Workers egress IPs (403).
+    // Prefer the admin-configured Gemini image model when available, and only
+    // then fall back to the ZAI service (works on the local/sandbox runtime).
+    let base64: string | undefined
+    const cfg = await db.siteConfig.findUnique({ where: { id: 'main' } })
+    const geminiKey = cfg?.geminiApiKey?.trim() ?? ''
+    if (geminiKey) {
+      const gem = await geminiImageEdit(geminiKey, PROMPT, dataUrl)
+      base64 = gem.base64
+    } else {
+      const result = await zaiImageEdit({
+        prompt: PROMPT,
+        images: [{ url: dataUrl }],
+        size: '1024x1024',
+      })
+      base64 = result?.data?.[0]?.base64
+    }
     if (!base64) {
       throw new Error('Empty response from background removal service')
     }
@@ -80,6 +90,12 @@ export async function POST(request: Request) {
         })
         .catch((e: unknown) => console.error('[tools/bg-remove] job record failed', e))
     }
-    return Response.json({ error: 'Background removal failed, please try again' }, { status: 502 })
+    return Response.json(
+      {
+        error:
+          'Background removal failed. On this deployment the AI backend requires an admin-configured Gemini API key (Admin → Settings → AI & Agent API Keys).',
+      },
+      { status: 502 }
+    )
   }
 }

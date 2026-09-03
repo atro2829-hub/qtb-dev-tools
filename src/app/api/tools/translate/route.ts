@@ -191,6 +191,10 @@ export async function POST(request: Request) {
         })
         .catch((e: unknown) => console.error('[tools/translate] job record failed', e))
     }
-    return Response.json({ error: 'Translation failed, please try again' }, { status: 502 })
+    const hint =
+      err instanceof Error && /ZAI API request failed/.test(err.message)
+        ? ' The built-in AI backend is unreachable from this deployment. An admin can add a Gemini API key in Admin → Settings → AI & Agent API Keys to enable translation.'
+        : ''
+    return Response.json({ error: `Translation failed, please try again.${hint}` }, { status: 502 })
   }
 }
