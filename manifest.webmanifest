@@ -1,0 +1,63 @@
+{
+  "name": "QTB DEV TOOLS — Professional Online Tools",
+  "short_name": "QTB TOOLS",
+  "description": "AI background removal, file conversion, document translation & PDF tools. Fast, secure, no installs.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#0a0a0a",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Remove Background",
+      "short_name": "BG Remove",
+      "description": "AI cutouts with transparent PNG output",
+      "url": "/?tool=bg",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "File Converter",
+      "short_name": "Convert",
+      "description": "PDF, Word, text and image conversions",
+      "url": "/?tool=convert",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "AI Translator",
+      "short_name": "Translate",
+      "description": "Translate documents across 12+ languages",
+      "url": "/?tool=translate",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "PDF Tools",
+      "short_name": "PDF",
+      "description": "Merge PDFs or extract page ranges",
+      "url": "/?tool=pdf",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
