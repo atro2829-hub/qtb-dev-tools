@@ -19,6 +19,25 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: false,
+  // Keep BUILD-TIME tooling (wrangler/workerd/esbuild/swc/native engines) out of
+  // the traced standalone output — they bloat the Workers bundle beyond limits.
+  outputFileTracingExcludes: {
+    "*": [
+      "node_modules/wrangler/**",
+      "node_modules/workerd/**",
+      "node_modules/@cloudflare/workerd-*/**",
+      "node_modules/miniflare/**",
+      "node_modules/esbuild/**",
+      "node_modules/@esbuild/**",
+      "node_modules/@next/swc*/**",
+      "node_modules/@swc/**",
+      "node_modules/@napi-rs/**",
+      "node_modules/@prisma/engines/**",
+      "node_modules/prisma/**",
+      "node_modules/rclone.js/**",
+      "node_modules/blake3-wasm/**",
+    ],
+  },
   // Native/Node-heavy libs must stay external so their worker files load correctly
   serverExternalPackages: ["pdf-parse", "pdfjs-dist", "docx", "mammoth"],
   typescript: {

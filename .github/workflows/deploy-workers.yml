@@ -41,6 +41,8 @@ jobs:
           du -sm .open-next/server-functions/default/* 2>/dev/null | sort -rn | head -12
           echo "=== biggest files > 1MB ==="
           find .open-next -type f -size +1M -exec du -m {} \; 2>/dev/null | sort -rn | head -15
+          echo "=== biggest importable (js/mjs/wasm/json) files > 300KB ==="
+          find .open-next/server-functions -type f \( -name "*.js" -o -name "*.mjs" -o -name "*.wasm" -o -name "*.cjs" \) -size +300k -exec du -k {} \; 2>/dev/null | sort -rn | head -20
           echo "=== worker.js size ==="
           ls -la .open-next/worker.js 2>/dev/null
 
