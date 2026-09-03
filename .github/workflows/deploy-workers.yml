@@ -1,0 +1,54 @@
+name: Deploy QTB DEV TOOLS to Cloudflare Workers
+
+on:
+  push:
+    branches: [production]
+  workflow_dispatch:
+
+concurrency:
+  group: cf-production-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma client (driver adapters)
+        run: bunx prisma generate
+
+      - name: Build with OpenNext for Cloudflare
+        run: bunx opennextjs-cloudflare build
+
+      - name: Publish to Cloudflare Workers + set runtime secrets
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+          secrets: |
+            AUTH_SECRET
+            SEED_ADMIN_PASSWORD
+            ZAI_BASE_URL
+            ZAI_API_KEY
+            ZAI_CHAT_ID
+            ZAI_TOKEN
+            ZAI_USER_ID
+        env:
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
+          SEED_ADMIN_PASSWORD: ${{ secrets.SEED_ADMIN_PASSWORD }}
+          ZAI_BASE_URL: ${{ secrets.ZAI_BASE_URL }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          ZAI_CHAT_ID: ${{ secrets.ZAI_CHAT_ID }}
+          ZAI_TOKEN: ${{ secrets.ZAI_TOKEN }}
+          ZAI_USER_ID: ${{ secrets.ZAI_USER_ID }}

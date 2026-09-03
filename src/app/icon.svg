@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="qtb-spark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="50%" stop-color="#d946ef"/>
+      <stop offset="100%" stop-color="#10b981"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="#0a0a0a"/>
+  <path d="M40.5 25.5a10.5 10.5 0 1 0 0 13 10.5 10.5 0 0 0 0-13zM36 38.5l9 9" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+  <path d="M49 9l1.6 4.4L55 15l-4.4 1.6L49 21l-1.6-4.4L43 15l4.4-1.6z" fill="url(#qtb-spark)"/>
+</svg>

@@ -1,0 +1,113 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String               @id @default(cuid())
+  email              String               @unique
+  password           String
+  name               String?
+  country            String?
+  address            String?
+  role               String               @default("user") // user | staff | admin | super_admin
+  subscriptionStatus String               @default("none") // none | trial | active | expired
+  trialEndsAt        DateTime?
+  profileComplete    Boolean              @default(false)
+  banned             Boolean              @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  subscriptionRequests SubscriptionRequest[]
+  toolJobs           ToolJob[]
+}
+
+model SiteConfig {
+  id               String   @id @default("main")
+  organization     String   @default("QTB DEV")
+  devName          String   @default("Mohammed AL-QUTAIBI")
+  devEmail         String   @default("dev@qutaibiv.com")
+  supportEmail     String   @default("info@qutaibiv.com")
+  logoUrl          String   @default("")
+  geminiApiKey     String   @default("")
+  agentApiKey      String   @default("")
+  admobAppId       String   @default("")
+  admobBannerId    String   @default("")
+  adsenseClientId  String   @default("")
+  adsenseSlotId    String   @default("")
+  freeTrialEnabled Boolean  @default(true)
+  freeTrialDays    Int      @default(365)
+  freeDailyLimit   Int      @default(5)
+  announcement     String   @default("")
+  updatedAt        DateTime @updatedAt
+}
+
+model BankAccount {
+  id            String   @id @default(cuid())
+  bankName      String
+  accountName   String
+  accountNumber String
+  iban          String   @default("")
+  swiftCode     String   @default("")
+  currency      String   @default("USD")
+  instructions  String   @default("")
+  iconSvg       String   @default("")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+}
+
+model SubscriptionRequest {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan            String    @default("yearly")
+  bankAccountId   String    @default("")
+  bankName        String    @default("")
+  amount          Float?
+  currency        String    @default("USD")
+  paymentReference String   @default("")
+  proofFileName   String    @default("")
+  proofData       String    @default("")
+  note            String    @default("")
+  status          String    @default("pending") // pending | approved | denied
+  reviewNote      String    @default("")
+  reviewedAt      DateTime?
+  createdAt       DateTime  @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String   @default("info") // info | offer | warning | success
+  audience  String   @default("all") // all | trial | expired | active
+  createdAt DateTime @default(now())
+  reads     NotificationRead[]
+}
+
+model NotificationRead {
+  id             String       @id @default(cuid())
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String
+  readAt         DateTime     @default(now())
+
+  @@unique([notificationId, userId])
+}
+
+model ToolJob {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  toolType     String // bg-remove | convert | translate
+  fileName     String   @default("")
+  sourceFormat String   @default("")
+  targetFormat String   @default("")
+  status       String   @default("completed") // completed | failed
+  detail       String   @default("")
+  createdAt    DateTime @default(now())
+}
