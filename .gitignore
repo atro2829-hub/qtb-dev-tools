@@ -78,3 +78,6 @@ server.log
 /tool-results/
 /agent-ctx/
 tsconfig.tsbuildinfo
+
+# generated prisma client (regenerated in CI via `prisma generate`)
+/src/generated/
