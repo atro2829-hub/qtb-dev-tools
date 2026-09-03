@@ -39,7 +39,7 @@ const nextConfig: NextConfig = {
     ],
   },
   // Native/Node-heavy libs must stay external so their worker files load correctly
-  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "docx", "mammoth"],
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
   typescript: {
     ignoreBuildErrors: true,
   },
