@@ -34,36 +34,9 @@ function normalizeImageFormat(ext: string): ImageFormat {
   return ext === 'jpeg' ? 'jpg' : (ext as ImageFormat)
 }
 
-/** Error thrown when image codecs are unavailable (Cloudflare Workers runtime). */
-class ImageRuntimeUnsupportedError extends Error {}
-
-async function convertImage(buffer: Buffer, target: ImageFormat): Promise<Buffer> {
-  // sharp ships native binaries — it can only run on the Node.js runtime.
-  // On Workers the web app performs image conversions client-side via canvas.
-  if (typeof process === 'undefined' || process.env.NEXT_RUNTIME === 'edge') {
-    throw new ImageRuntimeUnsupportedError('native image codecs unavailable')
-  }
-  let sharp: typeof import('sharp')
-  try {
-    sharp = (await import('sharp')).default
-  } catch {
-    throw new ImageRuntimeUnsupportedError('native image codecs unavailable')
-  }
-  let pipeline = sharp(buffer).rotate() // respect EXIF orientation
-  switch (target) {
-    case 'png':
-      pipeline = pipeline.png()
-      break
-    case 'jpg':
-      // JPEG has no alpha channel: flatten onto white
-      pipeline = pipeline.flatten({ background: '#ffffff' }).jpeg({ quality: 90 })
-      break
-    case 'webp':
-      pipeline = pipeline.flatten({ background: '#ffffff' }).webp({ quality: 90 })
-      break
-  }
-  return pipeline.toBuffer()
-}
+/** Image pixel processing cannot run on the Workers runtime (no native codecs,
+ * ~10ms CPU budget). The web app therefore performs image-to-image conversion
+ * client-side via canvas (see ToolConvertView) and only records the job here. */
 
 async function convertDocument(
   buffer: Buffer,
@@ -129,22 +102,14 @@ export async function POST(request: Request) {
         return badRequest(`Conversion from ${ext} to ${target} is not supported`)
       }
       targetFormat = target
-      try {
-        const data = await convertImage(buffer, target as ImageFormat)
-        result = { data, mimeType: IMAGE_MIMES[target as ImageFormat] }
-      } catch (convErr) {
-        if (convErr instanceof ImageRuntimeUnsupportedError) {
-          return Response.json(
-            {
-              error:
-                'Image-to-image conversion runs in your browser on this deployment. Please use the web app.',
-              code: 'USE_CLIENT_IMAGE',
-            },
-            { status: 501 }
-          )
-        }
-        throw convErr
-      }
+      return Response.json(
+        {
+          error:
+            'Image-to-image conversion runs in your browser on this deployment. Please use the web app.',
+          code: 'USE_CLIENT_IMAGE',
+        },
+        { status: 501 }
+      )
     } else if (['pdf', 'docx', 'txt'].includes(ext)) {
       const source = detectFormat(fileName)
       sourceFormat = source

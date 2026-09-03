@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: false,
   // Native/Node-heavy libs must stay external so their worker files load correctly
-  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "sharp", "docx", "mammoth"],
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "docx", "mammoth"],
   typescript: {
     ignoreBuildErrors: true,
   },
