@@ -20,6 +20,7 @@ export type View =
   | "tool-bg"
   | "tool-convert"
   | "tool-translate"
+  | "tool-audio"
   | "tool-pdf"
   | "subscription"
   | "notifications"
@@ -44,6 +45,7 @@ export const VIEW_PATHS: Record<View, string> = {
   "tool-bg": "/tools/background-remover",
   "tool-convert": "/tools/converter",
   "tool-translate": "/tools/translator",
+  "tool-audio": "/tools/audio-to-pdf",
   "tool-pdf": "/tools/pdf-tools",
   subscription: "/subscription",
   notifications: "/notifications",
@@ -69,6 +71,9 @@ const PATH_ALIASES: Record<string, View> = {
   "/tools/remove-bg": "tool-bg",
   "/tools/convert": "tool-convert",
   "/tools/translate": "tool-translate",
+  "/tools/audio": "tool-audio",
+  "/tools/speech": "tool-audio",
+  "/tools/transcribe": "tool-audio",
   "/tools/pdf": "tool-pdf",
   "/admin": "admin-settings",
   "/admin/notifications": "admin-notifications",
@@ -372,6 +377,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         bg: "tool-bg",
         convert: "tool-convert",
         translate: "tool-translate",
+        audio: "tool-audio",
         pdf: "tool-pdf",
       };
       if (user && user.profileComplete && tool && toolViews[tool]) {

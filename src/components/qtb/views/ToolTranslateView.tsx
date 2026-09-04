@@ -55,6 +55,7 @@ export default function ToolTranslateView() {
   const [sourceLang, setSourceLang] = useState("auto");
   const [targetLang, setTargetLang] = useState("");
   const [loading, setLoading] = useState(false);
+  const [readingPdf, setReadingPdf] = useState<number | null>(null);
   const [result, setResult] = useState<TranslateResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -88,6 +89,22 @@ export default function ToolTranslateView() {
       fd.set("file", file);
       fd.set("sourceLang", sourceLang);
       fd.set("targetLang", targetLang);
+      // PDF text is extracted IN THE BROWSER (pdf.js) — the Cloudflare
+      // Workers runtime cannot run pdfjs server-side.
+      const ext = (file.name.split(".").pop() ?? "").toLowerCase();
+      if (ext === "pdf") {
+        setReadingPdf(0);
+        const { extractPdfText } = await import("@/lib/client-pdf");
+        const text = await extractPdfText(file, setReadingPdf).finally(() =>
+          setReadingPdf(null)
+        );
+        if (!text.trim()) {
+          throw new Error(
+            "No readable text found in this PDF. Scanned/image-only pages need OCR, which is not supported yet."
+          );
+        }
+        fd.set("extractedText", text);
+      }
       const res = await api<TranslateResult>("/api/tools/translate", {
         method: "POST",
         body: fd,
@@ -243,7 +260,9 @@ export default function ToolTranslateView() {
             <div className="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-neutral-100 bg-neutral-50/60 p-8">
               <div className="qtb-spinner" />
               <p className="text-sm font-semibold text-neutral-600">
-                {t("tr.translating")}
+                {readingPdf !== null
+                  ? t("tool.readingPdf", { pct: readingPdf })
+                  : t("tr.translating")}
               </p>
               <div className="w-2/3 space-y-2">
                 <div className="qtb-shimmer h-2 rounded-full" />

@@ -11,67 +11,16 @@ export function detectFormat(fileName: string): SourceFormat {
   return 'unknown'
 }
 
-/** Minimal DOM API stubs so pdfjs-dist can load on the Workers runtime
- * (workerd has no DOMMatrix / Path2D / ImageData). Text extraction never
- * rasterizes pages, so the stubs only need to exist and be constructible. */
-function ensurePdfDomStubs(): void {
-  const g = globalThis as Record<string, unknown>
-  if (typeof g.DOMMatrix === 'undefined') {
-    class DOMMatrixStub {
-      a = 1; b = 0; c = 0; d = 0; e = 0; f = 0
-      constructor(init?: number[] | DOMMatrixStub) {
-        if (Array.isArray(init) && init.length >= 6) {
-          [this.a, this.b, this.c, this.d, this.e, this.f] = init
-        } else if (init instanceof DOMMatrixStub) {
-          this.a = init.a; this.b = init.b; this.c = init.c
-          this.d = init.d; this.e = init.e; this.f = init.f
-        }
-      }
-      translate(): DOMMatrixStub { return this }
-      scale(): DOMMatrixStub { return this }
-      rotate(): DOMMatrixStub { return this }
-      multiply(): DOMMatrixStub { return this }
-      inverse(): DOMMatrixStub { return this }
-      transformPoint(): { x: number; y: number } { return { x: 0, y: 0 } }
-      static fromMatrix(m: DOMMatrixStub) { return new DOMMatrixStub(m) }
-    }
-    g.DOMMatrix = DOMMatrixStub
-  }
-  if (typeof g.Path2D === 'undefined') {
-    g.Path2D = class Path2DStub {
-      moveTo() {} lineTo() {} bezierCurveTo() {} quadraticCurveTo() {}
-      arc() {} arcTo() {} rect() {} closePath() {}
-    }
-  }
-  if (typeof g.ImageData === 'undefined') {
-    g.ImageData = class ImageDataStub {
-      width: number; height: number; data: Uint8ClampedArray
-      constructor(w: number | Uint8ClampedArray, h?: number, d?: Uint8ClampedArray) {
-        if (w instanceof Uint8ClampedArray) {
-          this.data = w; this.width = h ?? 0; this.height = d?.length ? (d.length / 4) : 0
-        } else {
-          this.width = w; this.height = h ?? 0
-          this.data = new Uint8ClampedArray((w as number) * (h ?? 0) * 4)
-        }
-      }
-    }
-  }
-}
-
 /** Extract raw text from a pdf / docx / txt buffer. Throws on unsupported formats. */
 export async function extractText(buffer: Buffer, format: SourceFormat): Promise<string> {
   switch (format) {
-    case 'pdf': {
-      ensurePdfDomStubs()
-      const { PDFParse } = await import('pdf-parse')
-      const parser = new PDFParse({ data: new Uint8Array(buffer) })
-      try {
-        const result = await parser.getText()
-        return result.text
-      } finally {
-        await parser.destroy()
-      }
-    }
+    case 'pdf':
+      // pdfjs cannot run on the Workers runtime (no worker support, ~10ms
+      // CPU). The BROWSER extracts PDF text (see src/lib/client-pdf.ts) and
+      // sends it along as the `extractedText` field.
+      throw new Error(
+        'PDF text must be extracted in the browser (extractedText field missing)'
+      )
     case 'docx': {
       return extractDocxText(buffer)
     }

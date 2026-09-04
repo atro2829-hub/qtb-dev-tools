@@ -78,6 +78,15 @@ const REGISTRY = {
       <path d="m5 16.5.7 1.6 1.6.7-1.6.7L5 21l-.7-1.5-1.6-.7 1.6-.7z" />
     </>
   ),
+  mic: (
+    <>
+      {/* studio microphone */}
+      <rect x="9" y="2.5" width="6" height="11.5" rx="3" />
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0" />
+      <path d="M12 18v3.5" />
+      <path d="M8.5 21.5h7" />
+    </>
+  ),
   "upload-cloud": (
     <>
       <path d="M16.5 15.5 12 11l-4.5 4.5" />

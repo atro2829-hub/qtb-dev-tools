@@ -19,6 +19,7 @@ import DashboardView from "@/components/qtb/views/DashboardView";
 import ToolBgRemoveView from "@/components/qtb/views/ToolBgRemoveView";
 import ToolConvertView from "@/components/qtb/views/ToolConvertView";
 import ToolTranslateView from "@/components/qtb/views/ToolTranslateView";
+import ToolAudioView from "@/components/qtb/views/ToolAudioView";
 import ToolPdfView from "@/components/qtb/views/ToolPdfView";
 import SubscriptionView from "@/components/qtb/views/SubscriptionView";
 import NotificationsView from "@/components/qtb/views/NotificationsView";
@@ -99,6 +100,12 @@ function ViewSwitch({ view }: { view: View }) {
       return (
         <UserGate>
           <ToolTranslateView />
+        </UserGate>
+      );
+    case "tool-audio":
+      return (
+        <UserGate>
+          <ToolAudioView />
         </UserGate>
       );
     case "tool-pdf":

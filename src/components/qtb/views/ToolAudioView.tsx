@@ -1,0 +1,654 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { api } from "@/lib/client-api";
+import { useQtbToast } from "@/components/qtb/use-qtb-toast";
+import { useAppStore } from "@/store/app-store";
+import QTBIcon from "@/components/qtb/QTBIcon";
+import QTBButton from "@/components/qtb/QTBButton";
+import { GradientChip } from "@/components/qtb/ui-bits";
+import ToolIcon from "@/components/qtb/ToolIcon";
+import ToolHelpSheet from "@/components/qtb/ToolHelpSheet";
+import {
+  downloadBlob,
+  sanitizeFileBase,
+  smartDocToPdf,
+  smartDocToPlainText,
+  type SmartAudioDoc,
+} from "@/lib/client-audio-pdf";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+
+const MAX_BYTES = 14 * 1024 * 1024; // 14 MB
+
+const AUDIO_ACCEPT = ".mp3,.wav,.m4a,.aac,.ogg,.oga,.opus,.webm,.flac,.mp4,.3gp,.amr,audio/*";
+
+const STYLES = ["smart", "minutes", "lecture", "interview", "brief", "verbatim"] as const;
+type StyleKey = (typeof STYLES)[number];
+
+const LANGS = ["auto", "ar", "en"] as const;
+
+type Phase = "idle" | "transcribe" | "organize" | "pdf" | "done";
+
+interface AudioResult {
+  doc: SmartAudioDoc;
+  transcript: string;
+  engine?: { organize?: string; transcribe?: string };
+  pdfBlob?: Blob;
+}
+
+function formatDuration(sec: number): string {
+  if (!Number.isFinite(sec) || sec <= 0) return "--:--";
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function readAudioDuration(file: File): Promise<number> {
+  return new Promise((resolve) => {
+    try {
+      const url = URL.createObjectURL(file);
+      const el = new Audio();
+      const done = (v: number) => {
+        URL.revokeObjectURL(url);
+        resolve(v);
+      };
+      el.preload = "metadata";
+      el.onloadedmetadata = () => {
+        if (Number.isFinite(el.duration) && el.duration > 0) done(el.duration);
+        else {
+          // WebM recordings often report Infinity — seek far ahead to force it.
+          el.currentTime = 1e7;
+          el.ontimeupdate = () => {
+            el.ontimeupdate = null;
+            done(Number.isFinite(el.duration) ? el.duration : 0);
+          };
+          setTimeout(() => done(0), 2500);
+        }
+      };
+      el.onerror = () => done(0);
+      el.src = url;
+    } catch {
+      resolve(0);
+    }
+  });
+}
+
+export default function ToolAudioView() {
+  const toast = useQtbToast();
+  const lang = useAppStore((s) => s.lang);
+  const t = useAppStore((s) => s.t);
+
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const [mode, setMode] = useState<"upload" | "record">("upload");
+  const [file, setFile] = useState<File | null>(null);
+  const [duration, setDuration] = useState(0);
+  const [dragOver, setDragOver] = useState(false);
+
+  // recorder state
+  const [recording, setRecording] = useState(false);
+  const [recSecs, setRecSecs] = useState(0);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // options
+  const [style, setStyle] = useState<StyleKey>("smart");
+  const [targetLang, setTargetLang] = useState<string>("auto");
+
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [result, setResult] = useState<AudioResult | null>(null);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [building, setBuilding] = useState(false);
+
+  const busy = phase === "transcribe" || phase === "organize";
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      streamRef.current?.getTracks().forEach((tr) => tr.stop());
+    };
+  }, []);
+
+  const resetAll = () => {
+    stopRecorder(true);
+    setFile(null);
+    setDuration(0);
+    setResult(null);
+    setShowTranscript(false);
+    setPhase("idle");
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const acceptFile = async (f: File | undefined | null) => {
+    if (!f) return;
+    const okName = AUDIO_ACCEPT.split(",").some((ext) => f.name.toLowerCase().endsWith(ext.trim()));
+    if (!/^audio\//i.test(f.type) && !/^video\/(webm|mp4)$/i.test(f.type) && !okName) {
+      toast.error(new Error(t("au.wrongTypeMsg")), t("au.wrongType"));
+      return;
+    }
+    if (f.size > MAX_BYTES) {
+      toast.error(new Error(t("au.tooLargeMsg")), t("au.tooLarge"));
+      return;
+    }
+    setFile(f);
+    setResult(null);
+    setPhase("idle");
+    setDuration(await readAudioDuration(f));
+  };
+
+  /* ---------------------------- Recorder ---------------------------- */
+
+  const startRecorder = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const chunks: Blob[] = [];
+      chunksRef.current = chunks;
+      const mime = MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+          ? "audio/mp4"
+          : "";
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      recorderRef.current = rec;
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      rec.onstop = () => {
+        const ext = mime.includes("mp4") ? "m4a" : "webm";
+        const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+        const blob = new Blob(chunks, { type: mime || "audio/webm" });
+        const f = new File([blob], `recording-${stamp}.${ext}`, { type: mime || "audio/webm" });
+        void acceptFile(f);
+        streamRef.current?.getTracks().forEach((tr) => tr.stop());
+        streamRef.current = null;
+      };
+      rec.start();
+      setRecording(true);
+      setRecSecs(0);
+      setFile(null);
+      setResult(null);
+      timerRef.current = setInterval(() => setRecSecs((s) => s + 1), 1000);
+    } catch {
+      toast.error(new Error(t("au.micDeniedMsg")), t("au.micDenied"));
+    }
+  };
+
+  const stopRecorder = (silent = false) => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setRecording(false);
+    if (recorderRef.current && recorderRef.current.state !== "inactive") {
+      recorderRef.current.stop();
+      if (!silent) setMode("upload");
+    } else {
+      streamRef.current?.getTracks().forEach((tr) => tr.stop());
+      streamRef.current = null;
+    }
+  };
+
+  /* ------------------------------ Run ------------------------------ */
+
+  const run = async () => {
+    if (busy || !file) return;
+    setResult(null);
+    setShowTranscript(false);
+    setPhase("transcribe");
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      fd.set("style", style);
+      fd.set("targetLang", targetLang);
+      fd.set("duration", formatDuration(duration));
+      setPhase("organize");
+      const res = await api<{
+        doc: SmartAudioDoc;
+        transcript: string;
+        engine?: { organize?: string; transcribe?: string };
+        durationLabel?: string;
+      }>("/api/tools/audio-pdf", { method: "POST", body: fd });
+      setResult({ doc: res.doc, transcript: res.transcript, engine: res.engine });
+      setPhase("done");
+      toast.success(t("au.doneToast"), t("au.doneToastSub"));
+    } catch (err) {
+      setPhase("idle");
+      toast.error(err, t("au.failed"));
+    }
+  };
+
+  const buildPdf = async () => {
+    if (!result || building) return;
+    setBuilding(true);
+    setPhase("pdf");
+    try {
+      const meta = {
+        sourceFile: file?.name ?? "",
+        styleLabel: t(`au.style.${style}`),
+        processedAt: new Date().toLocaleString(lang === "ar" ? "ar" : "en-GB", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }),
+        durationLabel: duration ? formatDuration(duration) : undefined,
+      };
+      const blob = await smartDocToPdf(result.doc, meta);
+      const base = sanitizeFileBase(result.doc.title || file?.name || "audio-report");
+      downloadBlob(blob, `${base}.pdf`);
+      setResult((r) => (r ? { ...r, pdfBlob: blob } : r));
+      setPhase("done");
+      toast.success(t("au.pdfReady"), t("au.pdfReadySub"));
+    } catch (err) {
+      setPhase("done");
+      toast.error(err, t("au.pdfFailed"));
+    } finally {
+      setBuilding(false);
+    }
+  };
+
+  const copyText = async () => {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(smartDocToPlainText(result.doc, { sourceFile: file?.name ?? "", styleLabel: "", processedAt: "" }));
+      toast.success(t("au.copied"), t("au.copiedSub"));
+    } catch {
+      toast.error(new Error("Clipboard unavailable"), t("au.copyFailed"));
+    }
+  };
+
+  /* ------------------------------ UI ------------------------------ */
+
+  const doc = result?.doc;
+
+  return (
+    <div className="py-8 sm:py-10">
+      <button
+        type="button"
+        onClick={resetAll}
+        className="mb-5 inline-flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-semibold text-neutral-500 outline-none transition-colors hover:text-neutral-900"
+      >
+        <QTBIcon name="arrow-left" size={16} className={lang === "ar" ? "qtb-flip" : ""} /> {t("tool.back")}
+      </button>
+
+      <div className="flex flex-wrap items-start gap-4">
+        <ToolIcon tool="audio" size={58} />
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-extrabold tracking-tight text-neutral-900 sm:text-3xl">
+            {t("au.title")}
+          </h1>
+          <p className="mt-1 text-sm text-neutral-500">{t("au.sub")}</p>
+        </div>
+        <ToolHelpSheet tool="au" />
+      </div>
+
+      {/* Mode tabs */}
+      <div className="mt-6 inline-flex h-11 items-center gap-1 rounded-xl bg-neutral-100 p-1">
+        {(["upload", "record"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => {
+              if (recording && m === "upload") return;
+              setMode(m);
+            }}
+            className={cn(
+              "inline-flex min-h-9 items-center gap-2 rounded-lg px-4 text-sm font-bold transition-all outline-none",
+              mode === m ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"
+            )}
+          >
+            <QTBIcon name={m === "upload" ? "upload-cloud" : "mic"} size={15} />
+            {m === "upload" ? t("au.tabUpload") : t("au.tabRecord")}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-5 grid gap-6 lg:grid-cols-2">
+        {/* ---------------------- INPUT ---------------------- */}
+        <div className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-6">
+          <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-neutral-500">
+            {t("au.step1")}
+          </h2>
+
+          {mode === "upload" ? (
+            !file ? (
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={t("au.dropAudio")}
+                onClick={() => inputRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") inputRef.current?.click();
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  void acceptFile(e.dataTransfer.files?.[0]);
+                }}
+                className={cn(
+                  "flex min-h-52 cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed p-8 text-center transition-colors outline-none",
+                  dragOver
+                    ? "border-sky-400 bg-sky-50/60"
+                    : "border-neutral-300 bg-neutral-50/60 hover:border-sky-300 hover:bg-sky-50/40"
+                )}
+              >
+                <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-sky-600">
+                  <QTBIcon name="upload-cloud" size={26} />
+                </span>
+                <p className="text-sm font-bold text-neutral-800">{t("au.dropAudio")}</p>
+                <p className="text-xs text-neutral-500">{t("au.formats")}</p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-neutral-50/60 p-4">
+                <GradientChip icon="mic" tone="fuchsia" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-neutral-800">{file.name}</p>
+                  <p className="text-xs text-neutral-500">
+                    {(file.size / 1024 / 1024).toFixed(2)} MB
+                    {duration > 0 && <> · {formatDuration(duration)}</>}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFile(null);
+                    setDuration(0);
+                    setResult(null);
+                    if (inputRef.current) inputRef.current.value = "";
+                  }}
+                  aria-label={t("tool.removeFile")}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-rose-600 outline-none hover:bg-rose-50"
+                >
+                  <QTBIcon name="x" size={16} />
+                </button>
+              </div>
+            )
+          ) : (
+            <div className="flex min-h-52 flex-col items-center justify-center gap-5 rounded-2xl border-2 border-dashed border-sky-200 bg-sky-50/40 p-8">
+              {recording ? (
+                <>
+                  <div className="flex items-end gap-1.5" aria-hidden="true">
+                    {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                      <motion.span
+                        key={i}
+                        className="w-2.5 rounded-full bg-gradient-to-t from-sky-500 to-cyan-400"
+                        animate={{ height: [10, 12 + ((i * 13) % 34), 10] }}
+                        transition={{ repeat: Infinity, duration: 0.7 + i * 0.11, ease: "easeInOut" }}
+                        style={{ height: 12 }}
+                      />
+                    ))}
+                  </div>
+                  <p className="font-mono text-2xl font-extrabold tabular-nums text-sky-700">
+                    {formatDuration(recSecs)}
+                  </p>
+                  <QTBButton variant="outline" onClick={() => stopRecorder()}>
+                    <span className="inline-block h-3 w-3 rounded-[3px] bg-rose-500" />
+                    {t("au.recordStop")}
+                  </QTBButton>
+                </>
+              ) : (
+                <>
+                  <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-100 text-sky-600">
+                    <QTBIcon name="mic" size={26} />
+                  </span>
+                  <p className="text-sm font-bold text-neutral-800">{t("au.recordTitle")}</p>
+                  <p className="max-w-xs text-center text-xs text-neutral-500">{t("au.recordHint")}</p>
+                  <QTBButton onClick={startRecorder}>
+                    <QTBIcon name="mic" size={15} /> {t("au.recordStart")}
+                  </QTBButton>
+                </>
+              )}
+            </div>
+          )}
+
+          <input
+            ref={inputRef}
+            type="file"
+            accept={AUDIO_ACCEPT}
+            className="hidden"
+            onChange={(e) => {
+              void acceptFile(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+
+          {/* Options */}
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+                {t("au.pickStyle")}
+              </label>
+              <Select value={style} onValueChange={(v) => setStyle(v as StyleKey)}>
+                <SelectTrigger className="h-11 rounded-xl" aria-label={t("au.pickStyle")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STYLES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {t(`au.style.${s}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+                {t("au.pickLang")}
+              </label>
+              <Select value={targetLang} onValueChange={setTargetLang}>
+                <SelectTrigger className="h-11 rounded-xl" aria-label={t("au.pickLang")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGS.map((l) => (
+                    <SelectItem key={l} value={l}>
+                      {t(`au.lang.${l}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <p className="mt-3 flex items-start gap-1.5 text-xs leading-relaxed text-neutral-400">
+            <QTBIcon name="sparkles" size={13} className="mt-0.5 shrink-0 text-sky-500" />
+            {t("au.smartNote")}
+          </p>
+        </div>
+
+        {/* ---------------------- RESULT ---------------------- */}
+        <div className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-6">
+          <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-neutral-500">
+            {t("au.step2")}
+          </h2>
+
+          {busy || phase === "pdf" ? (
+            <div className="flex min-h-52 flex-col items-center justify-center gap-5 rounded-2xl border border-neutral-100 bg-neutral-50/60 p-8">
+              <div className="qtb-spinner" />
+              <div className="w-full max-w-xs space-y-2.5">
+                {(["transcribe", "organize", "pdf"] as const).map((step, i) => {
+                  const order: Phase[] = ["transcribe", "organize", "pdf"];
+                  const current = order.indexOf(phase);
+                  const active = phase === step;
+                  const doneStep = current > i;
+                  return (
+                    <div
+                      key={step}
+                      className={cn(
+                        "flex items-center gap-2.5 rounded-xl border px-3 py-2 text-xs font-bold transition-colors",
+                        active
+                          ? "border-sky-300 bg-sky-50 text-sky-700"
+                          : doneStep
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-neutral-200 bg-white text-neutral-400"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold",
+                          active ? "bg-sky-500 text-white" : doneStep ? "bg-emerald-500 text-white" : "bg-neutral-200 text-neutral-500"
+                        )}
+                      >
+                        {doneStep && !active ? "✓" : i + 1}
+                      </span>
+                      {t(`au.step.${step}`)}
+                      {active && (
+                        <motion.span
+                          className="ms-auto h-1.5 w-1.5 rounded-full bg-sky-500"
+                          animate={{ opacity: [0.2, 1, 0.2] }}
+                          transition={{ repeat: Infinity, duration: 1 }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-neutral-400">{t("au.patience")}</p>
+            </div>
+          ) : doc ? (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-4"
+            >
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4">
+                <p className="text-base font-extrabold text-neutral-900">{doc.title}</p>
+                {doc.subtitle && <p className="mt-0.5 text-xs text-neutral-500">{doc.subtitle}</p>}
+                <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-bold">
+                  <span className="rounded-full bg-white px-2.5 py-1 text-neutral-600 ring-1 ring-neutral-200">
+                    {doc.wordCount.toLocaleString("en-US")} {t("au.words")}
+                  </span>
+                  {result?.engine?.transcribe && (
+                    <span className="qtb-ltr rounded-full bg-white px-2.5 py-1 text-neutral-400 ring-1 ring-neutral-200">
+                      {result.engine.transcribe.split(":")[0]} + {result.engine.organize?.split(":")[0] ?? ""}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="qtb-scroll max-h-80 space-y-4 overflow-y-auto rounded-2xl border border-neutral-100 bg-neutral-50/40 p-4">
+                {doc.summary && (
+                  <div>
+                    <p className="mb-1 flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-sky-700">
+                      <QTBIcon name="file-text" size={13} /> {t("au.summaryLabel")}
+                    </p>
+                    <p className="text-sm leading-relaxed text-neutral-700">{doc.summary}</p>
+                  </div>
+                )}
+                {doc.keyPoints.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-sky-700">
+                      <QTBIcon name="list-check" size={13} /> {t("au.keyPointsLabel")}
+                    </p>
+                    <ul className="space-y-1">
+                      {doc.keyPoints.map((kp, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-neutral-700">
+                          <span className="mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
+                          {kp}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {doc.sections.map((s, i) => (
+                  <div key={i}>
+                    {s.heading && (
+                      <p className="mb-1 flex items-center gap-2 text-sm font-extrabold text-neutral-900">
+                        <span className="inline-block h-4 w-1 rounded-full bg-gradient-to-b from-sky-500 to-cyan-400" />
+                        {s.heading}
+                      </p>
+                    )}
+                    {s.paragraphs.map((p, j) => (
+                      <p key={j} className="mb-1.5 text-sm leading-relaxed text-neutral-700">
+                        {p}
+                      </p>
+                    ))}
+                    {s.bullets.length > 0 && (
+                      <ul className="space-y-1">
+                        {s.bullets.map((b, j) => (
+                          <li key={j} className="flex items-start gap-2 text-sm text-neutral-700">
+                            <span className="mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-400" />
+                            {b}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+                {doc.conclusion && (
+                  <div className="rounded-xl bg-white p-3 ring-1 ring-neutral-200">
+                    <p className="mb-1 text-xs font-extrabold uppercase tracking-wider text-neutral-500">
+                      {t("au.conclusionLabel")}
+                    </p>
+                    <p className="text-sm leading-relaxed text-neutral-700">{doc.conclusion}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2.5">
+                <QTBButton loading={building} onClick={buildPdf}>
+                  <QTBIcon name="download" size={15} /> {t("au.downloadPdf")}
+                </QTBButton>
+                <QTBButton
+                  variant="outline"
+                  onClick={() => {
+                    if (!result) return;
+                    const base = sanitizeFileBase(doc.title || file?.name || "audio-report");
+                    const txt = smartDocToPlainText(doc, { sourceFile: file?.name ?? "", styleLabel: "", processedAt: "" });
+                    downloadBlob(new Blob([txt], { type: "text/plain;charset=utf-8" }), `${base}.txt`);
+                  }}
+                >
+                  <QTBIcon name="file-text" size={15} /> TXT
+                </QTBButton>
+                <QTBButton variant="outline" onClick={copyText}>
+                  <QTBIcon name="copy" size={15} /> {t("au.copyText")}
+                </QTBButton>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowTranscript((v) => !v)}
+                className="inline-flex min-h-9 items-center gap-1.5 text-xs font-bold text-neutral-400 outline-none transition-colors hover:text-neutral-700"
+              >
+                <QTBIcon name={showTranscript ? "eye-off" : "eye"} size={13} />
+                {showTranscript ? t("au.hideTranscript") : t("au.showTranscript")}
+              </button>
+              {showTranscript && result?.transcript && (
+                <div className="qtb-scroll max-h-44 overflow-y-auto whitespace-pre-wrap rounded-xl bg-neutral-900 p-3.5 text-xs leading-relaxed text-neutral-100" dir="auto">
+                  {result.transcript}
+                </div>
+              )}
+            </motion.div>
+          ) : (
+            <div className="flex min-h-52 flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 bg-neutral-50/60 p-8 text-center">
+              <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-400">
+                <QTBIcon name="mic" size={26} />
+              </span>
+              <p className="text-sm font-semibold text-neutral-700">{t("au.resultEmpty")}</p>
+              <p className="max-w-xs text-xs text-neutral-500">{t("au.resultEmptySub")}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-7">
+        <QTBButton
+          size="lg"
+          loading={busy}
+          disabled={mode === "upload" ? !file || busy : recording || !file}
+          onClick={run}
+          wrapperClassName="w-full sm:w-auto [&>button]:w-full"
+        >
+          <QTBIcon name="sparkles" size={17} /> {t("au.run")}
+        </QTBButton>
+      </div>
+    </div>
+  );
+}

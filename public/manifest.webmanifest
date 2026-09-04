@@ -81,6 +81,12 @@
           "sizes": "192x192"
         }
       ]
+    },
+    {
+      "name": "Audio → Smart PDF",
+      "short_name": "Audio PDF",
+      "description": "Transcribe audio and get an organized PDF document",
+      "url": "/tools/audio-to-pdf"
     }
   ]
 }

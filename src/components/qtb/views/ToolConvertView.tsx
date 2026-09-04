@@ -86,6 +86,7 @@ export default function ToolConvertView() {
   const [file, setFile] = useState<File | null>(null);
   const [target, setTarget] = useState("");
   const [loading, setLoading] = useState(false);
+  const [readingPdf, setReadingPdf] = useState<number | null>(null);
   const [done, setDone] = useState<{ fileName: string; blob: Blob } | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -149,6 +150,21 @@ export default function ToolConvertView() {
       const fd = new FormData();
       fd.set("file", file);
       fd.set("targetFormat", target);
+      // PDF text is extracted IN THE BROWSER (pdf.js) — the Cloudflare
+      // Workers runtime cannot run pdfjs server-side.
+      if (ext === "pdf") {
+        setReadingPdf(0);
+        const { extractPdfText } = await import("@/lib/client-pdf");
+        const text = await extractPdfText(file, setReadingPdf).finally(() =>
+          setReadingPdf(null)
+        );
+        if (!text.trim()) {
+          throw new Error(
+            "No readable text found in this PDF. Scanned/image-only pages need OCR, which is not supported yet."
+          );
+        }
+        fd.set("extractedText", text);
+      }
       const res = await api<{ fileName: string; mimeType: string; dataBase64: string }>(
         "/api/tools/convert",
         { method: "POST", body: fd }
@@ -308,13 +324,25 @@ export default function ToolConvertView() {
           {loading ? (
             <div className="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-neutral-100 bg-neutral-50/60 p-8">
               <div className="qtb-spinner" />
-              <p className="text-sm font-semibold text-neutral-600">{t("tool.converting")}</p>
+              <p className="text-sm font-semibold text-neutral-600">
+                {readingPdf !== null
+                  ? t("tool.readingPdf", { pct: readingPdf })
+                  : t("tool.converting")}
+              </p>
               <div className="w-full max-w-xs overflow-hidden rounded-full bg-neutral-200">
                 <motion.div
                   className="h-2 rounded-full bg-gradient-to-r from-amber-400 via-fuchsia-500 to-emerald-400"
                   initial={{ width: "8%" }}
-                  animate={{ width: ["8%", "70%", "92%"] }}
-                  transition={{ duration: 2.2, ease: "easeInOut", repeat: Infinity }}
+                  animate={
+                    readingPdf !== null
+                      ? { width: `${Math.max(8, readingPdf)}%` }
+                      : { width: ["8%", "70%", "92%"] }
+                  }
+                  transition={
+                    readingPdf !== null
+                      ? { duration: 0.2 }
+                      : { duration: 2.2, ease: "easeInOut", repeat: Infinity }
+                  }
                 />
               </div>
             </div>

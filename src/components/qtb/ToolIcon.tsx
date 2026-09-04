@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 
-export type ToolKey = "bg" | "convert" | "translate" | "pdf";
+export type ToolKey = "bg" | "convert" | "translate" | "audio" | "pdf";
 
 export interface ToolIconProps {
   tool: ToolKey;
@@ -14,6 +14,7 @@ const PALETTES: Record<ToolKey, [string, string]> = {
   bg: ["#f59e0b", "#f97316"],
   convert: ["#f43f5e", "#d946ef"],
   translate: ["#10b981", "#14b8a6"],
+  audio: ["#0ea5e9", "#06b6d4"],
   pdf: ["#8b5cf6", "#d946ef"],
 };
 
@@ -96,6 +97,32 @@ export default function ToolIcon({ tool, size = 56, className }: ToolIconProps) 
         {/* exchange arrow */}
         <path d="m27 12.5 4.5-4.5 4.5 4.5" stroke={`url(#${gradId})`} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
         <path d="M31.5 8.5V21" stroke={`url(#${gradId})`} strokeWidth="3" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  if (tool === "audio") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className} aria-hidden="true">
+        {gradientDefs}
+        {/* Mic capsule */}
+        <rect x="17" y="4" width="14" height="23" rx="7" stroke={ink} strokeWidth="2.6" fill={`url(#${softId})`} />
+        {/* Mic arc + stand */}
+        <path d="M11 22a13 13 0 0 0 26 0" stroke={ink} strokeWidth="2.6" strokeLinecap="round" />
+        <path d="M24 35v6" stroke={ink} strokeWidth="2.6" strokeLinecap="round" />
+        <path d="M17.5 41h13" stroke={ink} strokeWidth="2.6" strokeLinecap="round" />
+        {/* Sound waves (gradient accent) */}
+        <path d="M6.5 17.5v.01" stroke={`url(#${gradId})`} strokeWidth="3.4" strokeLinecap="round" />
+        <path d="M3.5 24v.01" stroke={`url(#${gradId})`} strokeWidth="3.4" strokeLinecap="round" />
+        <path d="M6.5 30.5v.01" stroke={`url(#${gradId})`} strokeWidth="3.4" strokeLinecap="round" />
+        <path d="M41.5 17.5v.01" stroke={`url(#${gradId})`} strokeWidth="3.4" strokeLinecap="round" />
+        <path d="M44.5 24v.01" stroke={`url(#${gradId})`} strokeWidth="3.4" strokeLinecap="round" />
+        <path d="M41.5 30.5v.01" stroke={`url(#${gradId})`} strokeWidth="3.4" strokeLinecap="round" />
+        {/* Voice marks inside the capsule */}
+        <path d="M21.5 11v6" stroke={ink} strokeWidth="2.4" strokeLinecap="round" />
+        <path d="M26.5 12.5v6" stroke={`url(#${gradId})`} strokeWidth="2.4" strokeLinecap="round" />
+        {/* AI sparkle */}
+        <path d="M39.5 4.5 41 8.6l4.1 1.5-4.1 1.5-1.5 4.1-1.5-4.1L33.9 10.1 38 8.6z" fill={`url(#${gradId})`} />
       </svg>
     );
   }

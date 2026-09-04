@@ -1,5 +1,6 @@
 import { PrismaClient } from '@/generated/prisma/client'
 import { PrismaD1 } from '@prisma/adapter-d1'
+import { PrismaLibSQL } from '@prisma/adapter-libsql'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { hashPassword } from '@/lib/server/password'
 
@@ -22,9 +23,13 @@ function createClient(): PrismaClient {
   } catch {
     // No Cloudflare context — local Node/Bun dev against the file database.
   }
+  // Local dev: the queryCompiler client (engineType "client") always needs a
+  // driver adapter — libsql (N-API safe across isolates) against the local file.
   return new PrismaClient({
     log: ['error', 'warn'],
-    datasources: { db: { url: process.env.DATABASE_URL ?? 'file:./db/custom.db' } },
+    adapter: new PrismaLibSQL({
+      url: process.env.DATABASE_URL ?? 'file:./db/custom.db',
+    }),
   })
 }
 

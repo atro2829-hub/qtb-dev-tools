@@ -27,6 +27,7 @@ const TOOL_FILTERS: { value: string; label: string; icon: QTBIconName }[] = [
   { value: "bg-remove", label: "Background", icon: "remove-bg" },
   { value: "convert", label: "Converter", icon: "convert" },
   { value: "translate", label: "Translator", icon: "translate" },
+  { value: "audio-pdf", label: "Audio → PDF", icon: "mic" },
   { value: "pdf-merge", label: "PDF Merge", icon: "pdf" },
   { value: "pdf-split", label: "PDF Split", icon: "pdf" },
 ];

@@ -63,7 +63,7 @@ function QuotaRing({ used, limit }: { used: number; limit: number }) {
 const TOOL_CARDS: {
   view: View;
   icon: QTBIconName;
-  tone: "amber" | "rose" | "emerald" | "violet";
+  tone: "amber" | "rose" | "emerald" | "violet" | "sky";
   ring: string;
   titleKey: string;
   copyKey: string;
@@ -93,6 +93,14 @@ const TOOL_CARDS: {
     copyKey: "tr.sub",
   },
   {
+    view: "tool-audio",
+    icon: "mic",
+    tone: "sky",
+    ring: "from-sky-400 to-cyan-400",
+    titleKey: "au.title",
+    copyKey: "au.sub",
+  },
+  {
     view: "tool-pdf",
     icon: "pdf",
     tone: "violet",
@@ -106,12 +114,14 @@ function viewToToolKey(view: View): ToolKey {
   if (view === "tool-bg") return "bg";
   if (view === "tool-convert") return "convert";
   if (view === "tool-translate") return "translate";
+  if (view === "tool-audio") return "audio";
   return "pdf";
 }
 
 function jobIcon(toolType: string): QTBIconName {
   const t = toolType.toLowerCase();
   if (t.includes("bg") || t.includes("background") || t.includes("remove")) return "remove-bg";
+  if (t.includes("audio") || t.includes("speech") || t.includes("transcri")) return "mic";
   if (t.includes("pdf")) return "pdf";
   if (t.includes("convert")) return "convert";
   if (t.includes("transl")) return "translate";
@@ -127,6 +137,7 @@ function jobToolLabel(
   if (s.includes("bg") || s.includes("background") || s.includes("remove")) return t("bg.title");
   if (s.includes("convert")) return t("cv.title");
   if (s.includes("transl")) return t("tr.title");
+  if (s.includes("audio") || s.includes("speech") || s.includes("transcri")) return t("au.title");
   if (s.includes("pdf")) return t("pdf.title");
   return toolType.replace(/[-_]/g, " ") || t("dash.statusUnknown");
 }

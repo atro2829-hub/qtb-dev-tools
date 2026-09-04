@@ -41,21 +41,29 @@ function normalizeImageFormat(ext: string): ImageFormat {
 async function convertDocument(
   buffer: Buffer,
   source: SourceFormat,
-  target: 'docx' | 'pdf' | 'txt'
+  target: 'docx' | 'pdf' | 'txt',
+  extractedText: string
 ): Promise<{ data: Buffer; mimeType: string }> {
+  const text = async () => {
+    if (source === 'pdf') {
+      if (extractedText.trim()) return extractedText
+      throw new Error(
+        'PDF text must be extracted in the browser (extractedText field missing)'
+      )
+    }
+    return extractText(buffer, source)
+  }
   if (target === 'txt') {
-    const text = await extractText(buffer, source)
-    return { data: Buffer.from(text, 'utf8'), mimeType: DOC_MIMES.txt }
+    return { data: Buffer.from(await text(), 'utf8'), mimeType: DOC_MIMES.txt }
   }
   if (target === 'pdf') {
-    let text = await extractText(buffer, source)
-    if (source === 'docx') text = stripMarkdownArtifacts(text)
-    const data = await textToPdfBuffer(text)
+    let value = await text()
+    if (source === 'docx') value = stripMarkdownArtifacts(value)
+    const data = await textToPdfBuffer(value)
     return { data, mimeType: DOC_MIMES.pdf }
   }
   // target === 'docx'
-  const text = await extractText(buffer, source)
-  const data = await textToDocxBuffer(text)
+  const data = await textToDocxBuffer(await text())
   return { data, mimeType: DOC_MIMES.docx }
 }
 
@@ -75,6 +83,11 @@ export async function POST(request: Request) {
     const file = form.get('file')
     const rawTarget = form.get('targetFormat')
     const target = typeof rawTarget === 'string' ? rawTarget.trim().toLowerCase() : ''
+    const extractedTextRaw = form.get('extractedText')
+    const extractedText =
+      typeof extractedTextRaw === 'string'
+        ? extractedTextRaw.slice(0, 500_000)
+        : ''
 
     if (!(file instanceof File) || file.size === 0) {
       return badRequest('A file is required')
@@ -117,7 +130,7 @@ export async function POST(request: Request) {
         return badRequest(`Conversion from ${source} to ${target} is not supported`)
       }
       targetFormat = target
-      result = await convertDocument(buffer, source, target as 'docx' | 'pdf' | 'txt')
+      result = await convertDocument(buffer, source, target as 'docx' | 'pdf' | 'txt', extractedText)
     } else {
       return badRequest('Unsupported source file format')
     }

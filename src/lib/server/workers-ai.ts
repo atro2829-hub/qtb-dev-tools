@@ -57,6 +57,82 @@ function extractText(raw: unknown): string {
   return ''
 }
 
+/** Preferred speech-to-text models, in order (quality → fallback). */
+export const WORKERS_AI_STT_MODELS = [
+  '@cf/openai/whisper-large-v3-turbo',
+  '@cf/openai/whisper',
+  '@cf/deepgram/nova-3',
+]
+
+export interface WorkersAiSttResult {
+  text: string
+  model: string
+}
+
+/**
+ * Extract the transcript from any Workers AI speech-to-text response shape:
+ * whisper ({text}), deepgram ({results:{channels:[…]}}), or wrapped {result}.
+ */
+function extractTranscript(raw: unknown): string {
+  if (typeof raw === 'string') return raw
+  if (!raw || typeof raw !== 'object') return ''
+  const r = raw as Record<string, unknown>
+  if (typeof r.text === 'string' && r.text.trim()) return r.text
+  if (typeof r.transcript === 'string' && r.transcript.trim()) return r.transcript
+  if (r.results && typeof r.results === 'object') {
+    const results = r.results as Record<string, unknown>
+    if (Array.isArray(results.channels)) {
+      const ch = results.channels[0] as Record<string, unknown> | undefined
+      if (ch && Array.isArray(ch.alternatives)) {
+        const alt = ch.alternatives[0] as Record<string, unknown> | undefined
+        if (alt && typeof alt.transcript === 'string') return alt.transcript
+      }
+    }
+  }
+  if ('result' in r) return extractTranscript(r.result)
+  return ''
+}
+
+/**
+ * Transcribe an audio recording with Workers AI (runs inside Cloudflare —
+ * region-independent, no Gemini geo-block). Tries every STT model in order.
+ */
+export async function workersAiTranscribe(
+  audio: Uint8Array,
+  opts?: { timeoutMs?: number }
+): Promise<WorkersAiSttResult> {
+  const ai = getWorkersAi()
+  if (!ai) throw new Error('Workers AI is not available in this runtime')
+
+  const attempts: string[] = []
+  let lastError = 'Workers AI transcription failed'
+  for (const model of WORKERS_AI_STT_MODELS) {
+    attempts.push(model)
+    try {
+      const run = ai.run.bind(ai)
+      const isDeepgram = model.includes('deepgram')
+      const input: Record<string, unknown> = isDeepgram
+        ? { audio: Array.from(audio) }
+        : { audio }
+      const raw = (await Promise.race([
+        run(model, input),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Workers AI transcription timed out')),
+            opts?.timeoutMs ?? 110_000
+          )
+        ),
+      ])) as unknown
+      const text = extractTranscript(raw)
+      if (text.trim()) return { text, model }
+      lastError = 'Workers AI returned an empty transcript'
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err)
+    }
+  }
+  throw new Error(`${lastError} (tried: ${attempts.join(', ')})`)
+}
+
 /**
  * Run a chat instruction on Workers AI, trying the fallback model chain.
  * Throws with a combined message when every model fails.

@@ -67,6 +67,11 @@ export async function POST(request: Request) {
     const file = form.get('file')
     const sourceLang = getFormString(form, 'sourceLang') || 'auto'
     const targetLang = getFormString(form, 'targetLang')
+    const extractedTextRaw = form.get('extractedText')
+    const clientExtractedText =
+      typeof extractedTextRaw === 'string'
+        ? extractedTextRaw.slice(0, 500_000)
+        : ''
 
     if (!(file instanceof File) || file.size === 0) {
       return badRequest('A document file is required')
@@ -87,7 +92,20 @@ export async function POST(request: Request) {
     jobDetail = `${sourceLang}→${targetLang}`
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const rawText = await extractText(buffer, source)
+    let rawText: string
+    if (source === 'pdf') {
+      // pdfjs cannot run on Workers — the browser extracts the text and
+      // sends it along (see src/lib/client-pdf.ts).
+      if (clientExtractedText.trim()) {
+        rawText = clientExtractedText
+      } else {
+        return badRequest(
+          'PDF text must be extracted in the browser — please use the web app.'
+        )
+      }
+    } else {
+      rawText = await extractText(buffer, source)
+    }
     const truncated = rawText.slice(0, MAX_TRANSLATION_CHARS)
 
     let translated = ''

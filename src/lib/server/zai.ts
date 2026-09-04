@@ -311,3 +311,33 @@ export async function geminiImageEdit(
   }
   throw new Error(lastError)
 }
+
+/**
+ * Transcribe audio via the ZAI SDK (Node/local dev only — the SDK reads its
+ * config from the filesystem, which does not exist on Workers). Used as the
+ * last fallback of the audio→PDF tool when neither Gemini nor Workers AI is
+ * available in the current runtime.
+ */
+export async function zaiAsrTranscribe(audioBase64: string): Promise<string> {
+  const mod = (await import('z-ai-web-dev-sdk')) as unknown as {
+    default: {
+      create: () => Promise<{
+        audio: { asr: { create: (body: { file_base64: string }) => Promise<unknown> } }
+      }>
+    }
+  }
+  const zai = await mod.default.create()
+  const raw = await zai.audio.asr.create({ file_base64: audioBase64 })
+  const extract = (r: unknown): string => {
+    if (typeof r === 'string') return r
+    if (!r || typeof r !== 'object') return ''
+    const rec = r as Record<string, unknown>
+    if (typeof rec.text === 'string') return rec.text
+    if (rec.data && typeof rec.data === 'object') return extract(rec.data)
+    if (typeof rec.result === 'string') return rec.result
+    return ''
+  }
+  const text = extract(raw).trim()
+  if (!text) throw new Error('ZAI ASR returned an empty transcript')
+  return text
+}

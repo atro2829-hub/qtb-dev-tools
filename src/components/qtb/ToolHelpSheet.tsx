@@ -12,12 +12,13 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
-export type HelpTool = "bg" | "cv" | "tr" | "pdf";
+export type HelpTool = "bg" | "cv" | "tr" | "au" | "pdf";
 
 const TONES: Record<HelpTool, { chip: string; badge: string }> = {
   bg: { chip: "text-amber-600", badge: "bg-amber-100 text-amber-700" },
   cv: { chip: "text-rose-600", badge: "bg-rose-100 text-rose-700" },
   tr: { chip: "text-emerald-600", badge: "bg-emerald-100 text-emerald-700" },
+  au: { chip: "text-sky-600", badge: "bg-sky-100 text-sky-700" },
   pdf: { chip: "text-violet-600", badge: "bg-violet-100 text-violet-700" },
 };
 

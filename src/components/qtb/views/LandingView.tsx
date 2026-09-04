@@ -10,7 +10,7 @@ import { SectionHeading } from "@/components/qtb/ui-bits";
 const TOOLS: {
   view: View;
   icon: QTBIconName;
-  tone: "amber" | "rose" | "emerald" | "violet";
+  tone: "amber" | "rose" | "emerald" | "violet" | "sky";
   ring: string;
   titleKey: string;
   copyKey: string;
@@ -38,6 +38,14 @@ const TOOLS: {
     ring: "from-emerald-400 to-teal-400",
     titleKey: "tr.title",
     copyKey: "tr.sub",
+  },
+  {
+    view: "tool-audio",
+    icon: "mic",
+    tone: "sky",
+    ring: "from-sky-400 to-cyan-400",
+    titleKey: "au.title",
+    copyKey: "au.sub",
   },
   {
     view: "tool-pdf",
@@ -310,6 +318,7 @@ function viewToToolKey(view: View): ToolKey {
   if (view === "tool-bg") return "bg";
   if (view === "tool-convert") return "convert";
   if (view === "tool-translate") return "translate";
+  if (view === "tool-audio") return "audio";
   return "pdf";
 }
 
