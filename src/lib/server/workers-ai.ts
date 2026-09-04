@@ -99,16 +99,18 @@ function extractTranscript(raw: unknown): string {
  */
 export async function workersAiTranscribe(
   audio: Uint8Array,
+  mimeType?: string,
   opts?: { timeoutMs?: number }
 ): Promise<WorkersAiSttResult> {
   const ai = getWorkersAi()
   if (!ai) throw new Error('Workers AI is not available in this runtime')
 
-  // The binding's binary input accepts an exactly-sized ArrayBuffer.
+  // The binding's binary input schema wants { body, contentType }.
   const exact =
     audio.byteOffset === 0 && audio.byteLength === audio.buffer.byteLength
       ? (audio.buffer as ArrayBuffer)
       : new Uint8Array(audio).buffer as ArrayBuffer
+  const binary = { body: exact, contentType: mimeType || 'audio/wav' }
 
   const attempts: string[] = []
   let lastError = 'Workers AI transcription failed'
@@ -116,10 +118,7 @@ export async function workersAiTranscribe(
     attempts.push(model)
     try {
       const run = ai.run.bind(ai)
-      const isDeepgram = model.includes('deepgram')
-      const input: Record<string, unknown> = isDeepgram
-        ? { audio: Array.from(audio) }
-        : { audio: exact }
+      const input: Record<string, unknown> = { audio: binary }
       const raw = (await Promise.race([
         run(model, input),
         new Promise((_, reject) =>

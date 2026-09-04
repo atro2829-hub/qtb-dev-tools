@@ -361,7 +361,7 @@ export async function POST(request: Request) {
 
     if (!transcript) {
       try {
-        const r = await workersAiTranscribe(new Uint8Array(buffer))
+        const r = await workersAiTranscribe(new Uint8Array(buffer), mimeType)
         transcript = r.text.trim()
         transcribeEngine = `workers-ai:${r.model}`
       } catch (waErr) {
