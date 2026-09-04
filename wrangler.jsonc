@@ -23,6 +23,11 @@
       "database_id": "6bab3e4d-7447-489f-905f-408659c434ca"
     }
   ],
+  "ai": {
+    // Workers AI — region-independent AI fallback (translate) that runs
+    // inside Cloudflare regardless of Google API geo-restrictions.
+    "binding": "AI"
+  },
   "minify": true,
   "observability": {
     "enabled": true

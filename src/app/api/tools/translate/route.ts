@@ -1,4 +1,5 @@
 import { zaiChatCompletion, geminiTextGenerate, GeminiTextError } from '@/lib/server/zai'
+import { workersAiGenerate } from '@/lib/server/workers-ai'
 import { getSessionUser, unauthorized } from '@/lib/auth'
 import { enforceQuota } from '@/lib/server/quota'
 import { db } from '@/lib/db'
@@ -94,14 +95,33 @@ export async function POST(request: Request) {
     const cfg = await db.siteConfig.findUnique({ where: { id: 'main' } })
     const geminiKey = cfg?.geminiApiKey?.trim() ?? ''
 
+    let engine = 'gemini'
     if (geminiKey) {
-      const result = await geminiTextGenerate(
-        geminiKey,
-        [{ parts: [{ text: buildInstruction(sourceLang, targetLang, truncated) }] }],
-        { systemInstruction: SYSTEM_PROMPT, timeoutMs: 90_000 }
-      )
-      translated = result.text
-      if (!translated) throw new Error('Gemini returned an empty translation')
+      try {
+        const result = await geminiTextGenerate(
+          geminiKey,
+          [{ parts: [{ text: buildInstruction(sourceLang, targetLang, truncated) }] }],
+          { systemInstruction: SYSTEM_PROMPT, timeoutMs: 90_000 }
+        )
+        translated = result.text
+        if (!translated) throw new Error('Gemini returned an empty translation')
+      } catch (geminiErr) {
+        // Gemini unavailable (geo-blocked, key invalid, model retired…)
+        // → fall back to Workers AI, which runs inside Cloudflare and is
+        // NOT subject to regional API blocks.
+        const result = await workersAiGenerate(
+          SYSTEM_PROMPT,
+          buildInstruction(sourceLang, targetLang, truncated),
+          { timeoutMs: 110_000 }
+        )
+        translated = result.text
+        engine = `workers-ai (${result.model})`
+        jobDetail = `${sourceLang}→${targetLang} [${engine}]`
+        console.log(
+          `[tools/translate] Gemini fallback → Workers AI (${result.model}):`,
+          geminiErr instanceof Error ? geminiErr.message.slice(0, 160) : geminiErr
+        )
+      }
     } else {
       const response = await zaiChatCompletion({
         messages: [
@@ -154,16 +174,18 @@ export async function POST(request: Request) {
         })
         .catch((e: unknown) => console.error('[tools/translate] job record failed', e))
     }
-    const hint =
-      err instanceof GeminiTextError
-        ? /location is not supported/i.test(err.message)
-          ? ' The Gemini key rejected this server\'s region ("User location is not supported"). The key itself is valid — deploy the app in a supported region or use a key without regional restrictions.'
-          : /API key not valid|API_KEY_INVALID/i.test(err.message)
-            ? ' The stored Gemini API key is invalid — an admin can update it in Admin → Settings → AI & Agent API Keys.'
-            : ''
-      : err instanceof Error && /ZAI API request failed/.test(err.message)
-        ? ' The built-in AI backend is unreachable from this deployment. An admin can add a Gemini API key in Admin → Settings → AI & Agent API Keys to enable translation.'
-        : ''
+    let hint = ''
+    if (err instanceof Error && /Workers AI is not available/i.test(err.message)) {
+      hint = ' The automatic Workers AI fallback only runs on the Cloudflare deployment.'
+    } else if (err instanceof GeminiTextError) {
+      if (/location is not supported/i.test(err.message)) {
+        hint = ' The Gemini key is valid, but Google geo-blocks this server region — and the Workers AI fallback also failed (it may have hit its free daily limit; it resets at 00:00 UTC).'
+      } else if (/API key not valid|API_KEY_INVALID/i.test(err.message)) {
+        hint = ' The stored Gemini API key is invalid — an admin can update it in Admin → Settings → AI & Agent API Keys.'
+      }
+    } else if (err instanceof Error && /ZAI API request failed/.test(err.message)) {
+      hint = ' The built-in AI backend is unreachable from this deployment. An admin can add a Gemini API key in Admin → Settings → AI & Agent API Keys to enable translation.'
+    }
     return Response.json({ error: `Translation failed, please try again.${hint}` }, { status: 502 })
   }
 }
