@@ -205,9 +205,38 @@ function BootScreen() {
 /* Shell                                                               */
 /* ------------------------------------------------------------------ */
 
+/** Browser-tab title per view — keys into the i18n dictionary. */
+const VIEW_TITLE_KEYS: Partial<Record<View, string>> = {
+  "tool-bg": "bg.title",
+  "tool-convert": "cv.title",
+  "tool-translate": "tr.title",
+  "tool-audio": "au.title",
+  "tool-pdf": "pdf.title",
+  dashboard: "nav.dashboard",
+  subscription: "sub.title",
+  notifications: "notif.title",
+  "profile-me": "me.title",
+  "admin-settings": "admin.settings",
+  "admin-staff": "admin.staff",
+  "admin-monetization": "admin.monetization",
+  "admin-notifications": "admin.broadcast",
+  "admin-banks": "admin.banks",
+  "admin-requests": "admin.requests",
+  "admin-jobs": "admin.jobs",
+};
+
+const BASE_TITLE = "QTB DEV TOOLS";
+
+function syncDocTitle(view: View) {
+  const t = useAppStore.getState().t;
+  const key = VIEW_TITLE_KEYS[view];
+  document.title = key ? `${t(key)} — ${BASE_TITLE}` : BASE_TITLE;
+}
+
 export default function AppShell() {
   const booted = useAppStore((s) => s.booted);
   const view = useAppStore((s) => s.view);
+  const lang = useAppStore((s) => s.lang);
   const bootstrap = useAppStore((s) => s.bootstrap);
 
   useEffect(() => {
@@ -227,6 +256,11 @@ export default function AppShell() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   }, [view]);
+
+  // Per-view browser tab title (follows the active view + language).
+  useEffect(() => {
+    syncDocTitle(view);
+  }, [view, lang]);
 
   if (!booted) return <BootScreen />;
 

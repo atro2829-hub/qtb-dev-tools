@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
 import { ar as arLocale } from "date-fns/locale";
@@ -118,6 +118,17 @@ function viewToToolKey(view: View): ToolKey {
   return "pdf";
 }
 
+/** Map a ToolJob.toolType string back to its dashboard card view. */
+function jobToolView(toolType: string): View | null {
+  const t = toolType.toLowerCase();
+  if (t.includes("bg") || t.includes("background") || t.includes("remove")) return "tool-bg";
+  if (t.includes("audio") || t.includes("speech") || t.includes("transcri")) return "tool-audio";
+  if (t.includes("transl")) return "tool-translate";
+  if (t.includes("convert")) return "tool-convert";
+  if (t.includes("pdf")) return "tool-pdf";
+  return null;
+}
+
 function jobIcon(toolType: string): QTBIconName {
   const t = toolType.toLowerCase();
   if (t.includes("bg") || t.includes("background") || t.includes("remove")) return "remove-bg";
@@ -224,6 +235,16 @@ export default function DashboardView() {
   const trialExpired = daysLeft !== null && daysLeft < 0;
   const firstName = (user?.name ?? "there").split(" ")[0];
 
+  // Per-tool usage counts from the already-fetched recent jobs (no extra API).
+  const usageByView = useMemo(() => {
+    const m = new Map<View, number>();
+    for (const j of jobs ?? []) {
+      const v = jobToolView(j.toolType);
+      if (v) m.set(v, (m.get(v) ?? 0) + 1);
+    }
+    return m;
+  }, [jobs]);
+
   return (
     <div className="py-8 sm:py-10">
       {/* Header */}
@@ -312,7 +333,7 @@ export default function DashboardView() {
       )}
 
       {/* Tools */}
-      <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
         {TOOL_CARDS.map((tool, i) => (
           <motion.div
             key={tool.view}
@@ -325,12 +346,27 @@ export default function DashboardView() {
             <span
               className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${tool.ring} opacity-75 transition-opacity group-hover:opacity-100`}
             />
+            {(usageByView.get(tool.view) ?? 0) > 0 && (
+              <span
+                title={t("dash.runs", { n: usageByView.get(tool.view) ?? 0 })}
+                className="absolute end-4 top-4 rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-bold tabular-nums text-neutral-500 ring-1 ring-neutral-200 transition-colors group-hover:bg-fuchsia-50 group-hover:text-fuchsia-600 group-hover:ring-fuchsia-200"
+              >
+                ×{usageByView.get(tool.view)}
+              </span>
+            )}
             <ToolIcon
               tool={viewToToolKey(tool.view)}
               size={52}
               className="transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110"
             />
-            <h3 className="mt-4 text-lg font-bold text-neutral-900">{t(tool.titleKey)}</h3>
+            <h3 className="mt-4 flex items-center gap-2 text-lg font-bold text-neutral-900">
+              {t(tool.titleKey)}
+              {tool.view === "tool-audio" && (
+                <span className="rounded-full bg-gradient-to-r from-sky-500 to-cyan-400 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white shadow-sm">
+                  {t("dash.new")}
+                </span>
+              )}
+            </h3>
             <p className="mt-1 text-sm text-neutral-500">{t(tool.copyKey)}</p>
             <div className="mt-5 flex items-center gap-2">
               <QTBButton size="sm" onClick={() => setView(tool.view)}>

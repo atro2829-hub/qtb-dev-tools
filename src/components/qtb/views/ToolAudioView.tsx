@@ -293,6 +293,38 @@ export default function ToolAudioView() {
     }
   };
 
+  /**
+   * Share the result through the native share sheet when possible (mobile:
+   * shares the generated PDF file), else share title+summary text, else fall
+   * back to copying the plain text. User-cancel is silently ignored.
+   */
+  const shareResult = async () => {
+    if (!result) return;
+    const nav = navigator as Navigator & {
+      canShare?: (data?: ShareData) => boolean;
+    };
+    try {
+      const base = sanitizeFileBase(result.doc.title || file?.name || "audio-report");
+      if (result.pdfBlob && typeof nav.canShare === "function" && typeof nav.share === "function") {
+        const f = new File([result.pdfBlob], `${base}.pdf`, { type: "application/pdf" });
+        if (nav.canShare({ files: [f] })) {
+          await nav.share({ files: [f], title: result.doc.title, text: result.doc.summary || undefined });
+          return;
+        }
+      }
+      if (typeof nav.share === "function") {
+        await nav.share({ title: result.doc.title, text: result.doc.summary || result.doc.title });
+        return;
+      }
+      await navigator.clipboard.writeText(smartDocToPlainText(result.doc, { sourceFile: file?.name ?? "", styleLabel: "", processedAt: "" }));
+      toast.success(t("au.copied"), t("au.copiedSub"));
+    } catch (err) {
+      // AbortError = user closed the share sheet — not an error.
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      toast.error(err, t("au.copyFailed"));
+    }
+  };
+
   /* ------------------------------ UI ------------------------------ */
 
   const doc = result?.doc;
@@ -626,6 +658,9 @@ export default function ToolAudioView() {
               <div className="flex flex-wrap gap-2.5">
                 <QTBButton loading={building} onClick={buildPdf}>
                   <QTBIcon name="download" size={15} /> {t("au.downloadPdf")}
+                </QTBButton>
+                <QTBButton variant="outline" onClick={shareResult}>
+                  <QTBIcon name="send" size={15} /> {t("au.share")}
                 </QTBButton>
                 <QTBButton
                   variant="outline"
