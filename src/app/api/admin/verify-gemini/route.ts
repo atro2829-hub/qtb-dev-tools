@@ -50,6 +50,8 @@ export async function POST(request: Request) {
       })
     }
 
+    const colo =
+      (request as Request & { cf?: { colo?: string } }).cf?.colo ?? null
     const result = await geminiTextGenerate(
       keyToTest,
       [{ parts: [{ text: 'Reply with exactly: OK' }] }],
@@ -59,23 +61,25 @@ export async function POST(request: Request) {
       ok: true,
       model: result.model,
       latencyMs: result.latencyMs,
-      message: `Key works! AI translation ran on ${result.model} in ${result.latencyMs}ms.`,
+      colo,
+      message: `Key works! AI translation ran on ${result.model} in ${result.latencyMs}ms${colo ? ` (edge: ${colo})` : ''}.`,
     })
   } catch (err) {
     console.error('[admin/verify-gemini]', err)
     const attempts = err instanceof GeminiTextError ? err.attempts : []
+    const colo = (request as Request & { cf?: { colo?: string } }).cf?.colo ?? null
     let message =
       err instanceof Error
         ? err.message.slice(0, 240)
         : 'Verification failed — could not reach the Gemini API.'
-    if (err instanceof GeminiTextError && err.name === 'AbortError') {
-      message = 'Request timed out — check network access to generativelanguage.googleapis.com.'
-    }
-    if (/location is not supported/i.test(message)) {
+    const geoBlocked = /location is not supported/i.test(message)
+    if (geoBlocked) {
       message =
-        'The key is valid, but this server region is blocked by Google ("User location is not supported"). Try again from a supported region/deployment.'
+        'The key is VALID (it authenticated), but Google blocks AI inference from this server region ("User location is not supported"). Visitors from supported regions can still use the AI tools — Gemini runs on the edge nearest to each visitor.'
     } else if (/API key not valid|API_KEY_INVALID/i.test(message)) {
       message = 'Key rejected — the API key is not valid. Double-check it in Google AI Studio.'
+    } else if (err instanceof GeminiTextError && err.name === 'AbortError') {
+      message = 'Request timed out — check network access to generativelanguage.googleapis.com.'
     } else if (attempts.length > 1) {
       message += ` (tried: ${attempts.join(', ')})`
     }
@@ -83,6 +87,8 @@ export async function POST(request: Request) {
       ok: false,
       model: attempts.at(-1) ?? null,
       latencyMs: 0,
+      colo,
+      geoBlocked,
       message,
     })
   }

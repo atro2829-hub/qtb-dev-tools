@@ -205,11 +205,15 @@ export async function geminiTextGenerate(
           /* keep generic */
         }
         lastMessage = msg
-        // Retired / unknown model → try the next one. Geo/auth errors are
-        // terminal for every model but we still record the message.
+        // Regional blocks apply to the caller's location — identical for
+        // every model → fail fast with the clear geo message.
+        if (/location is not supported/i.test(msg)) {
+          throw new GeminiTextError(msg, attempts)
+        }
+        // Retired / unknown model → try the next one.
         const retired =
           res.status === 404 ||
-          /no longer available|not found for API version|is not supported/i.test(msg)
+          /no longer available|not found for API version/i.test(msg)
         if (retired) continue
         throw new GeminiTextError(msg, attempts)
       }
