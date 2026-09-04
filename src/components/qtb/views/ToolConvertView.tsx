@@ -111,12 +111,16 @@ export default function ToolConvertView() {
     setDone(null);
   };
 
+  // Double-submit guard immune to state batching.
+  const runningRef = useRef(false);
+
   const handleConvert = async () => {
-    if (!file || loading) return;
+    if (!file || loading || runningRef.current) return;
     if (!target) {
       toast.error(new Error(t("cv.chooseTarget")), t("cv.missingFormat"));
       return;
     }
+    runningRef.current = true;
     setLoading(true);
     try {
       const isImageToImage =
@@ -176,6 +180,7 @@ export default function ToolConvertView() {
     } catch (err) {
       toast.error(err, t("cv.failed"));
     } finally {
+      runningRef.current = false;
       setLoading(false);
     }
   };

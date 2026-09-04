@@ -60,8 +60,12 @@ export default function ToolBgRemoveView() {
     acceptFile(e.dataTransfer.files?.[0]);
   };
 
+  // Double-submit guard immune to state batching.
+  const runningRef = useRef(false);
+
   const handleRemove = async () => {
-    if (!file || loading) return;
+    if (!file || loading || runningRef.current) return;
+    runningRef.current = true;
     setLoading(true);
     try {
       const fd = new FormData();
@@ -76,6 +80,7 @@ export default function ToolBgRemoveView() {
     } catch (err) {
       toast.error(err, t("bg.failed"));
     } finally {
+      runningRef.current = false;
       setLoading(false);
     }
   };

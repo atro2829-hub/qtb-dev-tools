@@ -229,8 +229,13 @@ export default function ToolAudioView() {
 
   /* ------------------------------ Run ------------------------------ */
 
+  // In-flight guard immune to state batching — a double-click must never
+  // fire the (expensive) transcription pipeline twice.
+  const runningRef = useRef(false);
+
   const run = async () => {
-    if (busy || !file) return;
+    if (runningRef.current || busy || !file) return;
+    runningRef.current = true;
     setResult(null);
     setShowTranscript(false);
     setPhase("transcribe");
@@ -253,6 +258,8 @@ export default function ToolAudioView() {
     } catch (err) {
       setPhase("idle");
       toast.error(err, t("au.failed"));
+    } finally {
+      runningRef.current = false;
     }
   };
 

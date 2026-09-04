@@ -78,12 +78,16 @@ export default function ToolTranslateView() {
     setResult(null);
   };
 
+  // Double-submit guard immune to state batching.
+  const runningRef = useRef(false);
+
   const handleTranslate = async () => {
-    if (!file || loading) return;
+    if (!file || loading || runningRef.current) return;
     if (!targetLang) {
       toast.error(new Error(t("tr.chooseTarget")), t("tr.missingLang"));
       return;
     }
+    runningRef.current = true;
     setLoading(true);
     try {
       const fd = new FormData();
@@ -120,6 +124,7 @@ export default function ToolTranslateView() {
     } catch (err) {
       toast.error(err, t("tr.failed"));
     } finally {
+      runningRef.current = false;
       setLoading(false);
     }
   };
