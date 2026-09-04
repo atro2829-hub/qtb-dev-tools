@@ -94,6 +94,9 @@ export default function ToolAudioView() {
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // live waveform (decorative — every failure is silently ignored)
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
 
   // options
   const [style, setStyle] = useState<StyleKey>("smart");
@@ -110,8 +113,34 @@ export default function ToolAudioView() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       streamRef.current?.getTracks().forEach((tr) => tr.stop());
+      audioCtxRef.current?.close().catch(() => {});
     };
   }, []);
+
+  /** Wire the mic stream into an AnalyserNode for the live waveform. */
+  const attachWaveform = (stream: MediaStream) => {
+    try {
+      const Ctx: typeof AudioContext | undefined =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.55;
+      ctx.createMediaStreamSource(stream).connect(analyser);
+      audioCtxRef.current = ctx;
+      analyserRef.current = analyser;
+    } catch {
+      /* waveform is decorative */
+    }
+  };
+
+  const detachWaveform = () => {
+    analyserRef.current = null;
+    audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
+  };
 
   const resetAll = () => {
     stopRecorder(true);
@@ -146,6 +175,7 @@ export default function ToolAudioView() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
+      attachWaveform(stream);
       const chunks: Blob[] = [];
       chunksRef.current = chunks;
       const mime = MediaRecorder.isTypeSupported("audio/webm")
@@ -159,6 +189,7 @@ export default function ToolAudioView() {
         if (e.data.size > 0) chunks.push(e.data);
       };
       rec.onstop = () => {
+        detachWaveform();
         const ext = mime.includes("mp4") ? "m4a" : "webm";
         const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
         const blob = new Blob(chunks, { type: mime || "audio/webm" });
@@ -183,6 +214,7 @@ export default function ToolAudioView() {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+    detachWaveform();
     setRecording(false);
     if (recorderRef.current && recorderRef.current.state !== "inactive") {
       recorderRef.current.stop();
@@ -235,6 +267,7 @@ export default function ToolAudioView() {
           timeStyle: "short",
         }),
         durationLabel: duration ? formatDuration(duration) : undefined,
+        logoUrl: useAppStore.getState().config?.logoUrl || undefined,
       };
       const blob = await smartDocToPdf(result.doc, meta);
       const base = sanitizeFileBase(result.doc.title || file?.name || "audio-report");
@@ -375,20 +408,18 @@ export default function ToolAudioView() {
             <div className="flex min-h-52 flex-col items-center justify-center gap-5 rounded-2xl border-2 border-dashed border-sky-200 bg-sky-50/40 p-8">
               {recording ? (
                 <>
-                  <div className="flex items-end gap-1.5" aria-hidden="true">
-                    {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-                      <motion.span
-                        key={i}
-                        className="w-2.5 rounded-full bg-gradient-to-t from-sky-500 to-cyan-400"
-                        animate={{ height: [10, 12 + ((i * 13) % 34), 10] }}
-                        transition={{ repeat: Infinity, duration: 0.7 + i * 0.11, ease: "easeInOut" }}
-                        style={{ height: 12 }}
-                      />
-                    ))}
+                  <div className="w-full max-w-sm" aria-hidden="true">
+                    <LiveWaveform analyserRef={analyserRef} active={recording} />
                   </div>
-                  <p className="font-mono text-2xl font-extrabold tabular-nums text-sky-700">
-                    {formatDuration(recSecs)}
-                  </p>
+                  <div className="flex items-center gap-2" role="status">
+                    <span className="relative inline-flex h-2.5 w-2.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
+                    </span>
+                    <p className="font-mono text-2xl font-extrabold tabular-nums text-sky-700">
+                      {formatDuration(recSecs)}
+                    </p>
+                  </div>
                   <QTBButton variant="outline" onClick={() => stopRecorder()}>
                     <span className="inline-block h-3 w-3 rounded-[3px] bg-rose-500" />
                     {t("au.recordStop")}
@@ -651,4 +682,88 @@ export default function ToolAudioView() {
       </div>
     </div>
   );
+}
+
+/**
+ * Real-time mic waveform — mirrored bar history rendered on canvas from an
+ * AnalyserNode (RMS → rolling history). Purely decorative: when no analyser
+ * is attached it draws a gentle idle shimmer so the panel never looks dead.
+ */
+function LiveWaveform({
+  analyserRef,
+  active,
+}: {
+  analyserRef: React.RefObject<AnalyserNode | null>;
+  active: boolean;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const BARS = 44;
+    const history: number[] = new Array(BARS).fill(0);
+    const buf = new Uint8Array(analyserRef.current?.fftSize ?? 1024);
+    let raf = 0;
+    let idlePhase = 0;
+
+    const draw = () => {
+      raf = requestAnimationFrame(draw);
+      const analyser = analyserRef.current;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (!w || !h) return;
+      if (canvas.width !== Math.round(w * dpr)) {
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+
+      let level = 0;
+      if (analyser) {
+        analyser.getByteTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) {
+          const v = (buf[i] - 128) / 128;
+          sum += v * v;
+        }
+        level = Math.min(1, Math.sqrt(sum / buf.length) * 3.4);
+      } else {
+        idlePhase += 0.05;
+        level = 0.12 + 0.08 * Math.sin(idlePhase);
+      }
+      history.push(level);
+      history.shift();
+
+      const gap = 3;
+      const bw = Math.max(3, (w - gap * (BARS - 1)) / BARS);
+      for (let i = 0; i < BARS; i++) {
+        // center-weighted ease so the edges calm down and the middle talks
+        const eased = Math.pow(history[i], 0.8);
+        const bh = Math.max(4, eased * (h - 10));
+        const x = i * (bw + gap);
+        const y = (h - bh) / 2;
+        const grad = ctx.createLinearGradient(0, y, 0, y + bh);
+        grad.addColorStop(0, "#22d3ee");
+        grad.addColorStop(1, "#0284c7");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        if (typeof ctx.roundRect === "function") {
+          ctx.roundRect(x, y, bw, bh, Math.min(bw / 2, 3));
+        } else {
+          ctx.rect(x, y, bw, bh);
+        }
+        ctx.fill();
+      }
+    };
+    draw();
+    return () => cancelAnimationFrame(raf);
+  }, [analyserRef, active]);
+
+  return <canvas ref={canvasRef} className="h-16 w-full" aria-hidden="true" />;
 }

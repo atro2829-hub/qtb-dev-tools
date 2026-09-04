@@ -1,11 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   useAppStore,
   isAdmin,
   DEFAULT_SITE_CONFIG,
+  viewFromPath,
+  consumePostAuthPath,
+  type View,
 } from "@/store/app-store";
 import { api } from "@/lib/client-api";
 import { useQtbToast } from "@/components/qtb/use-qtb-toast";
@@ -29,6 +32,17 @@ export default function AuthView() {
   const bootstrap = useAppStore((s) => s.bootstrap);
   const t = useAppStore((s) => s.t);
   const toast = useQtbToast();
+  // Path remembered from a signed-out deep link (e.g. someone opening a
+  // shared /tools/audio-to-pdf link) — after login we return them there.
+  const [postAuthView, setPostAuthView] = useState<View | null>(null);
+
+  useEffect(() => {
+    const dest = consumePostAuthPath();
+    if (dest) {
+      const v = viewFromPath(dest);
+      if (v && v !== "landing" && v !== "auth") setPostAuthView(v);
+    }
+  }, []);
 
   // Sign in
   const [siEmail, setSiEmail] = useState("");
@@ -48,6 +62,13 @@ export default function AuthView() {
   const routeAfterAuth = () => {
     const user = useAppStore.getState().user;
     if (!user) return;
+    // 1) Honor a remembered deep-link destination (role-guarded).
+    if (postAuthView) {
+      if (!postAuthView.startsWith("admin-") || isAdmin(user)) {
+        setView(postAuthView);
+        return;
+      }
+    }
     if (!user.profileComplete) setView("profile");
     else if (isAdmin(user)) setView("admin-settings");
     else setView("dashboard");
@@ -156,6 +177,19 @@ export default function AuthView() {
             <CardDescription>{t("auth.cardSub")}</CardDescription>
           </CardHeader>
           <CardContent>
+            {postAuthView && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 flex items-center gap-2.5 rounded-xl border border-sky-200 bg-sky-50 px-3.5 py-2.5 text-xs font-semibold text-sky-800"
+                role="status"
+              >
+                <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-sky-100">
+                  <QTBIcon name="arrow-left" size={13} className="rtl:rotate-180" />
+                </span>
+                {t("auth.continueTo")}
+              </motion.div>
+            )}
             <Tabs defaultValue="signin">
               <TabsList className="mb-5 grid h-11 w-full grid-cols-2 rounded-xl">
                 <TabsTrigger value="signin" className="rounded-lg font-semibold">

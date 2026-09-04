@@ -152,6 +152,19 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event("qtb:open-palette"))}
+              aria-label={t("nav.search")}
+              title={t("nav.search")}
+              className="hidden h-10 items-center gap-2 rounded-xl border border-neutral-200 bg-white pl-3 pr-2 text-neutral-400 outline-none transition-all hover:border-neutral-300 hover:text-neutral-600 hover:shadow-sm md:inline-flex"
+            >
+              <QTBIcon name="search" size={15} />
+              <span className="hidden text-xs font-semibold lg:inline">{t("cmd.placeholder").replace(/…$/, "")}</span>
+              <kbd className="rounded-md border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-neutral-400">
+                ⌘K
+              </kbd>
+            </button>
             <InstallAppButton className="hidden lg:inline-flex" />
             <LanguageToggle />
             {!user ? (
@@ -250,6 +263,17 @@ export default function Navbar() {
                   </SheetTitle>
                 </SheetHeader>
                 <div className="flex flex-col gap-1 p-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileOpen(false);
+                      window.dispatchEvent(new Event("qtb:open-palette"));
+                    }}
+                    className="mb-1 flex h-12 items-center gap-3 rounded-xl border border-neutral-200 px-4 text-sm font-semibold text-neutral-500 outline-none hover:bg-neutral-50"
+                  >
+                    <QTBIcon name="search" size={17} />
+                    {t("nav.search")}
+                  </button>
                   <InstallAppButton className="mb-1 w-full justify-center" />
                   {NAV_LINKS.map((link) => (
                     <button

@@ -128,7 +128,7 @@ export default function LandingView() {
           <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-extrabold leading-[1.08] tracking-tight text-neutral-900 sm:text-5xl lg:text-6xl">
             {t("landing.title1")} {t("landing.title2")}
             <br />
-            <span className="bg-gradient-to-r from-amber-500 via-fuchsia-500 to-violet-500 bg-clip-text text-transparent">
+            <span className="qtb-text-shimmer bg-gradient-to-r from-amber-500 via-fuchsia-500 to-violet-500 bg-clip-text text-transparent">
               {t("landing.titleAccent")}
             </span>
           </h1>
@@ -160,6 +160,17 @@ export default function LandingView() {
               {t("landing.trialNote")}
             </p>
           )}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("qtb:open-palette"))}
+            className="group mx-auto mt-6 flex w-fit items-center gap-2 rounded-full border border-neutral-200/80 bg-white/70 px-4 py-1.5 text-xs font-semibold text-neutral-500 shadow-sm outline-none backdrop-blur transition-all hover:border-neutral-300 hover:text-neutral-700 hover:shadow"
+          >
+            <QTBIcon name="search" size={12} className="text-neutral-400 transition-colors group-hover:text-fuchsia-500" />
+            {t("cmd.tip")}
+            <kbd className="rounded-md border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-neutral-400 transition-colors group-hover:text-neutral-600">
+              Ctrl K
+            </kbd>
+          </button>
         </motion.div>
       </section>
 

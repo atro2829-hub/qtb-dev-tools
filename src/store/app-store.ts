@@ -80,6 +80,24 @@ const PATH_ALIASES: Record<string, View> = {
   "/admin/banks": "admin-banks",
 };
 
+/** sessionStorage key holding the path to return to after the next login. */
+export const POST_AUTH_PATH_KEY = "qtb_post_auth_path";
+
+/**
+ * Read-and-clear the remembered post-auth destination (deep links while
+ * signed out). Returns null when absent/unparseable.
+ */
+export function consumePostAuthPath(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = sessionStorage.getItem(POST_AUTH_PATH_KEY);
+    sessionStorage.removeItem(POST_AUTH_PATH_KEY);
+    return v;
+  } catch {
+    return null;
+  }
+}
+
 /** Resolve a location.pathname to a view, or null when unknown. */
 export function viewFromPath(pathname: string): View | null {
   if (typeof pathname !== "string") return null;
@@ -365,12 +383,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const current = get().view;
     let view: View = current;
+    let fromUrl: View | null = null;
 
     // Deep link: restore the view from the REAL URL path (e.g. /dashboard,
     // /tools/translator, /admin/settings). Works for shared links, refreshes
     // and PWA shortcuts. Legacy ?tool= query strings still honored.
     if (typeof window !== "undefined") {
-      const fromUrl = viewFromPath(window.location.pathname);
+      fromUrl = viewFromPath(window.location.pathname);
       if (fromUrl) view = fromUrl;
       const tool = new URLSearchParams(window.location.search).get("tool");
       const toolViews: Record<string, View> = {
@@ -388,6 +407,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (user) {
       if (!user.profileComplete) view = "profile";
       else if (view === "landing" && current === "landing") view = "dashboard";
+    } else if (fromUrl && fromUrl !== "landing") {
+      // Signed-out deep link: remember the destination so AuthView can return
+      // there after login, and show the auth view instead of silently
+      // bouncing to the marketing page (shared /tools/... links keep working).
+      try {
+        sessionStorage.setItem(POST_AUTH_PATH_KEY, VIEW_PATHS[fromUrl]);
+      } catch {
+        /* ignore */
+      }
+      view = "auth";
     } else {
       view = "landing";
     }

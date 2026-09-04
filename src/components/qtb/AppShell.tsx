@@ -33,6 +33,7 @@ import AdminBanksView from "@/components/qtb/views/admin/AdminBanksView";
 import AdminRequestsView from "@/components/qtb/views/admin/AdminRequestsView";
 import AdminJobsView from "@/components/qtb/views/admin/AdminJobsView";
 import PwaRegister from "@/components/qtb/PwaRegister";
+import CommandPalette from "@/components/qtb/CommandPalette";
 
 /* ------------------------------------------------------------------ */
 /* Guards                                                              */
@@ -232,6 +233,7 @@ export default function AppShell() {
   return (
     <div className="flex min-h-screen flex-col bg-white text-neutral-900">
       <PwaRegister />
+      <CommandPalette />
       <Navbar />
       <main id="main" className="w-full flex-1">
         <div className="mx-auto w-full max-w-6xl px-4">

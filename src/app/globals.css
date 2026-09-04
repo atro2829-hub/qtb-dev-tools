@@ -229,6 +229,27 @@
   will-change: transform;
   animation: qtb-aurora-drift-alt 18s ease-in-out infinite;
 }
+
+/* Slow shimmer for gradient headline text (landing accent).
+   NOTE: distinct name — .qtb-shimmer below is the skeleton-loader effect. */
+.qtb-text-shimmer {
+  background-size: 200% auto;
+  animation: qtb-text-shimmer 6s ease-in-out infinite;
+}
+@keyframes qtb-text-shimmer {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qtb-text-shimmer {
+    animation: none;
+  }
+}
 @keyframes qtb-aurora-drift {
   0%,
   100% {

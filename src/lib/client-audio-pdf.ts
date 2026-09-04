@@ -41,6 +41,8 @@ export interface AudioPdfMeta {
   styleLabel: string;
   processedAt: string; // ISO or localized string
   durationLabel?: string;
+  /** Optional site logo (admin setting) drawn in the header tile. */
+  logoUrl?: string;
   engine?: string;
 }
 
@@ -268,7 +270,27 @@ function accentGradient(ctx: CanvasRenderingContext2D, x: number, y: number, w: 
 
 const LINE = (size: number) => Math.round(size * 1.52);
 
-function drawBrandPanel(p: { ctx: CanvasRenderingContext2D }, meta: AudioPdfMeta, title: string) {
+/**
+ * Fetch the admin site logo as a decodable bitmap. Fetch (not <img>) so the
+ * canvas is never tainted — any failure simply falls back to the Q mark.
+ */
+async function loadLogoBitmap(url?: string): Promise<ImageBitmap | null> {
+  if (!url || typeof fetch === "undefined" || typeof createImageBitmap !== "function") {
+    return null;
+  }
+  try {
+    const res = await fetch(url, { mode: "cors", credentials: "omit" });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (!blob.type.startsWith("image/")) return null;
+    return await createImageBitmap(blob);
+  } catch {
+    return null;
+  }
+}
+
+
+function drawBrandPanel(p: { ctx: CanvasRenderingContext2D }, meta: AudioPdfMeta, title: string, logo: ImageBitmap | null) {
   const { ctx } = p;
   const panelH = 168;
   const x = MARGIN_X;
@@ -289,15 +311,28 @@ function drawBrandPanel(p: { ctx: CanvasRenderingContext2D }, meta: AudioPdfMeta
   ctx.fillRect(x, y, 340, panelH);
   ctx.restore();
 
-  // Q mark tile
-  roundRect(ctx, x + 28, y + 44, 80, 80, 20);
+  // Logo tile (admin logoUrl) — falls back to the Q brand mark
+  const tileX = x + 28;
+  const tileY = y + 44;
+  roundRect(ctx, tileX, tileY, 80, 80, 20);
   ctx.fillStyle = "#ffffff";
   ctx.fill();
-  setFont(ctx, 800, 44, "Q");
-  ctx.fillStyle = "#101014";
-  ctx.textAlign = "center";
-  ctx.direction = "ltr";
-  ctx.fillText("Q", x + 68, y + 44 + 58);
+  if (logo) {
+    ctx.save();
+    roundRect(ctx, tileX + 6, tileY + 6, 68, 68, 15);
+    ctx.clip();
+    const s = Math.max(68 / logo.width, 68 / logo.height);
+    const dw = logo.width * s;
+    const dh = logo.height * s;
+    ctx.drawImage(logo, tileX + (80 - dw) / 2, tileY + (80 - dh) / 2, dw, dh);
+    ctx.restore();
+  } else {
+    setFont(ctx, 800, 44, "Q");
+    ctx.fillStyle = "#101014";
+    ctx.textAlign = "center";
+    ctx.direction = "ltr";
+    ctx.fillText("Q", x + 68, y + 44 + 58);
+  }
 
   // Brand label + tool name
   setFont(ctx, 700, 22, "QTB");
@@ -483,12 +518,13 @@ export async function smartDocToPdf(
   meta: AudioPdfMeta
 ): Promise<Blob> {
   await ensureFonts();
+  const logo = await loadLogoBitmap(meta.logoUrl);
 
   const p = new Paginator();
   const rtlDoc = isRtlText(doc.title) || doc.language?.toLowerCase().startsWith("ar");
 
   /* ---- Page 1: brand panel + title + meta ---- */
-  p.y = drawBrandPanel(p, meta, doc.title) + 44;
+  p.y = drawBrandPanel(p, meta, doc.title, logo) + 44;
 
   // Title (centered, auto-fit)
   const titleFit = fitTitle(p.ctx, doc.title, CONTENT_W - 80);
