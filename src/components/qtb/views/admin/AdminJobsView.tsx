@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { api } from "@/lib/client-api";
 import { useQtbToast } from "@/components/qtb/use-qtb-toast";
@@ -50,6 +50,49 @@ function toolTone(toolType: string): "amber" | "rose" | "emerald" | "violet" {
   return "rose";
 }
 
+/** Bucket a raw toolType string into one of the admin filter keys. */
+function jobBucket(toolType: string): string {
+  const t = toolType.toLowerCase();
+  if (t.includes("bg") || t.includes("background")) return "bg-remove";
+  if (t.includes("merge")) return "pdf-merge";
+  if (t.includes("split")) return "pdf-split";
+  if (t.includes("transl")) return "translate";
+  if (t.includes("audio") || t.includes("speech") || t.includes("transcri")) return "audio-pdf";
+  if (t.includes("convert")) return "convert";
+  return "other";
+}
+
+/** Distribution bar fills — mirror each tool's dashboard color identity. */
+const BUCKET_FILLS: Record<string, string> = {
+  "bg-remove": "bg-gradient-to-r from-amber-400 to-orange-400",
+  convert: "bg-gradient-to-r from-rose-400 to-fuchsia-400",
+  translate: "bg-gradient-to-r from-emerald-400 to-teal-400",
+  "audio-pdf": "bg-gradient-to-r from-sky-400 to-cyan-400",
+  "pdf-merge": "bg-gradient-to-r from-violet-400 to-fuchsia-400",
+  "pdf-split": "bg-gradient-to-r from-violet-500 to-purple-500",
+  other: "bg-neutral-300",
+};
+
+const BUCKET_LABELS: Record<string, string> = {
+  "bg-remove": "Background",
+  convert: "Converter",
+  translate: "Translator",
+  "audio-pdf": "Audio → PDF",
+  "pdf-merge": "PDF Merge",
+  "pdf-split": "PDF Split",
+  other: "Other",
+};
+
+const BUCKET_ICONS: Record<string, QTBIconName> = {
+  "bg-remove": "remove-bg",
+  convert: "convert",
+  translate: "translate",
+  "audio-pdf": "mic",
+  "pdf-merge": "pdf",
+  "pdf-split": "pdf",
+  other: "sparkles",
+};
+
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
@@ -89,6 +132,22 @@ export default function AdminJobsView() {
   useEffect(() => {
     void load(tool);
   }, [tool]);
+
+  // Usage distribution + success stats computed from the loaded page of jobs.
+  const dist = useMemo(() => {
+    const buckets = new Map<string, number>();
+    let failed = 0;
+    for (const j of jobs ?? []) {
+      const k = jobBucket(j.toolType);
+      buckets.set(k, (buckets.get(k) ?? 0) + 1);
+      if (j.status.toLowerCase() === "failed") failed++;
+    }
+    const total = jobs?.length ?? 0;
+    const segments = [...buckets.entries()]
+      .map(([key, count]) => ({ key, count, pct: total ? (count / total) * 100 : 0 }))
+      .sort((a, b) => b.count - a.count);
+    return { buckets, segments, failed, total, okPct: total ? Math.round(((total - failed) / total) * 100) : 0 };
+  }, [jobs]);
 
   return (
     <div className="pb-10">
@@ -137,6 +196,66 @@ export default function AdminJobsView() {
           </button>
         ))}
       </div>
+
+      {/* Usage distribution (aggregate view only) */}
+      {tool === "all" && jobs !== null && !loading && jobs.length > 0 && (
+        <div className="mt-5 rounded-2xl border border-neutral-200 bg-white p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-neutral-900">
+              <QTBIcon name="list-check" size={15} className="text-violet-500" />
+              Usage distribution
+            </h2>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-semibold text-neutral-500">
+              <span className="inline-flex items-center gap-1.5">
+                <QTBIcon name="activity" size={12} className="text-violet-500" />
+                {dist.total} job{dist.total === 1 ? "" : "s"} loaded
+              </span>
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5",
+                  dist.okPct >= 90 ? "text-emerald-600" : dist.okPct >= 70 ? "text-amber-600" : "text-rose-600"
+                )}
+              >
+                <QTBIcon name="check" size={12} /> {dist.okPct}% succeeded
+              </span>
+              {dist.failed > 0 && (
+                <span className="inline-flex items-center gap-1.5 text-rose-600">
+                  <QTBIcon name="alert" size={12} /> {dist.failed} failed
+                </span>
+              )}
+            </div>
+          </div>
+          <div
+            role="img"
+            aria-label={`Job distribution: ${dist.segments
+              .map((s) => `${BUCKET_LABELS[s.key]} ${s.count}`)
+              .join(", ")}`}
+            className="mt-3 flex h-3 w-full gap-px overflow-hidden rounded-full bg-neutral-100"
+          >
+            {dist.segments.map((s) => (
+              <span
+                key={s.key}
+                title={`${BUCKET_LABELS[s.key]} — ${s.count} (${Math.round(s.pct)}%)`}
+                style={{ width: `${s.pct}%` }}
+                className={cn("h-full min-w-[3px] transition-all duration-500", BUCKET_FILLS[s.key])}
+              />
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+            {dist.segments.map((s) => (
+              <span
+                key={s.key}
+                className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-neutral-600"
+              >
+                <span className={cn("h-2 w-2 rounded-full", BUCKET_FILLS[s.key])} />
+                <QTBIcon name={BUCKET_ICONS[s.key]} size={11} className="text-neutral-400" />
+                {BUCKET_LABELS[s.key]}
+                <span className="tabular-nums text-neutral-400">×{s.count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* List */}
       <div className="mt-5">

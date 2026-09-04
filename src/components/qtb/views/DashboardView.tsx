@@ -129,6 +129,15 @@ function jobToolView(toolType: string): View | null {
   return null;
 }
 
+/** Chip tone per tool view — mirrors each dashboard card's color identity. */
+const TONE_BY_VIEW: Record<string, "amber" | "rose" | "emerald" | "sky" | "violet"> = {
+  "tool-bg": "amber",
+  "tool-convert": "rose",
+  "tool-translate": "emerald",
+  "tool-audio": "sky",
+  "tool-pdf": "violet",
+};
+
 function jobIcon(toolType: string): QTBIconName {
   const t = toolType.toLowerCase();
   if (t.includes("bg") || t.includes("background") || t.includes("remove")) return "remove-bg";
@@ -411,27 +420,53 @@ export default function DashboardView() {
           />
         ) : (
           <ul className="qtb-scroll max-h-72 space-y-2 overflow-y-auto pr-1">
-            {jobs.map((job) => (
-              <li
-                key={job.id || `${job.fileName}-${job.createdAt}`}
-                className="flex items-center gap-3 rounded-xl border border-neutral-100 bg-neutral-50/60 p-3 transition-colors hover:bg-neutral-50"
-              >
-                <GradientChip icon={jobIcon(job.toolType)} tone="neutral" size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-neutral-800">
-                    {job.fileName}
-                  </p>
-                  <p className="text-xs text-neutral-400">
-                    {jobToolLabel(job.toolType, t)} ·{" "}
-                    {formatDistanceToNow(new Date(job.createdAt), {
-                      addSuffix: true,
-                      locale: lang === "ar" ? arLocale : undefined,
-                    })}
-                  </p>
-                </div>
-                <StatusBadge status={job.status} />
-              </li>
-            ))}
+            {jobs.map((job) => {
+              const target = jobToolView(job.toolType);
+              const tone = (target && TONE_BY_VIEW[target]) || "neutral";
+              const hint = target
+                ? `${t("dash.reopenJob")} — ${jobToolLabel(job.toolType, t)}`
+                : job.fileName;
+              return (
+                <li key={job.id || `${job.fileName}-${job.createdAt}`}>
+                  <button
+                    type="button"
+                    onClick={() => target && setView(target)}
+                    disabled={!target}
+                    aria-label={hint}
+                    title={hint}
+                    className={cn(
+                      "group/row flex w-full items-center gap-3 rounded-xl border p-3 text-start outline-none transition-all duration-200",
+                      "focus-visible:ring-2 focus-visible:ring-fuchsia-400 focus-visible:ring-offset-1",
+                      target
+                        ? "border-neutral-100 bg-neutral-50/60 hover:-translate-y-px hover:border-neutral-200 hover:bg-white hover:shadow-sm active:scale-[0.995]"
+                        : "cursor-default border-neutral-100 bg-neutral-50/60"
+                    )}
+                  >
+                    <GradientChip icon={jobIcon(job.toolType)} tone={tone} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-neutral-800">
+                        {job.fileName}
+                      </p>
+                      <p className="text-xs text-neutral-400">
+                        {jobToolLabel(job.toolType, t)} ·{" "}
+                        {formatDistanceToNow(new Date(job.createdAt), {
+                          addSuffix: true,
+                          locale: lang === "ar" ? arLocale : undefined,
+                        })}
+                      </p>
+                    </div>
+                    <StatusBadge status={job.status} />
+                    {target && (
+                      <QTBIcon
+                        name="arrow-left"
+                        size={14}
+                        className="-scale-x-100 shrink-0 text-neutral-300 opacity-0 transition-all duration-200 group-hover/row:translate-x-0.5 group-hover/row:text-fuchsia-500 group-hover/row:opacity-100 rtl:scale-x-100 rtl:group-hover/row:-translate-x-0.5"
+                      />
+                    )}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
