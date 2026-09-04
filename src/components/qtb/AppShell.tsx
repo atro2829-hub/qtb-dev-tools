@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   useAppStore,
   isAdmin,
+  viewFromPath,
   type View,
 } from "@/store/app-store";
 import { useQtbToast } from "@/components/qtb/use-qtb-toast";
@@ -204,6 +205,16 @@ export default function AppShell() {
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
+
+  // Browser back/forward: map the URL path back to its view (no push).
+  useEffect(() => {
+    const onPop = () => {
+      const next = viewFromPath(window.location.pathname) ?? "landing";
+      useAppStore.setState({ view: next });
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });

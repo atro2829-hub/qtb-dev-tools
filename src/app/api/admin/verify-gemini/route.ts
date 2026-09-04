@@ -1,6 +1,7 @@
 import { getSessionUser, forbidden, unauthorized } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { enforceRateLimit } from '@/lib/server/rate-limit'
+import { geminiTextGenerate, GeminiTextError } from '@/lib/server/zai'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -49,61 +50,40 @@ export async function POST(request: Request) {
       })
     }
 
-    const started = Date.now()
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 15000)
-
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(keyToTest)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: 'Reply with exactly: OK' }] }],
-            generationConfig: { maxOutputTokens: 8 },
-          }),
-        }
-      )
-      const latencyMs = Date.now() - started
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '')
-        let reason = `HTTP ${res.status}`
-        try {
-          const parsed = JSON.parse(errText) as { error?: { message?: string } }
-          if (parsed?.error?.message) reason = parsed.error.message.slice(0, 200)
-        } catch {
-          /* keep HTTP status reason */
-        }
-        return Response.json({
-          ok: false,
-          model: 'gemini-2.0-flash',
-          latencyMs,
-          message: `Key rejected — ${reason}`,
-        })
-      }
-
-      return Response.json({
-        ok: true,
-        model: 'gemini-2.0-flash',
-        latencyMs,
-        message: `Key works! Translation will use Gemini (responded in ${latencyMs}ms).`,
-      })
-    } finally {
-      clearTimeout(timeout)
-    }
+    const result = await geminiTextGenerate(
+      keyToTest,
+      [{ parts: [{ text: 'Reply with exactly: OK' }] }],
+      { timeoutMs: 15_000 }
+    )
+    return Response.json({
+      ok: true,
+      model: result.model,
+      latencyMs: result.latencyMs,
+      message: `Key works! AI translation ran on ${result.model} in ${result.latencyMs}ms.`,
+    })
   } catch (err) {
-    const aborted = err instanceof Error && err.name === 'AbortError'
     console.error('[admin/verify-gemini]', err)
+    const attempts = err instanceof GeminiTextError ? err.attempts : []
+    let message =
+      err instanceof Error
+        ? err.message.slice(0, 240)
+        : 'Verification failed — could not reach the Gemini API.'
+    if (err instanceof GeminiTextError && err.name === 'AbortError') {
+      message = 'Request timed out — check network access to generativelanguage.googleapis.com.'
+    }
+    if (/location is not supported/i.test(message)) {
+      message =
+        'The key is valid, but this server region is blocked by Google ("User location is not supported"). Try again from a supported region/deployment.'
+    } else if (/API key not valid|API_KEY_INVALID/i.test(message)) {
+      message = 'Key rejected — the API key is not valid. Double-check it in Google AI Studio.'
+    } else if (attempts.length > 1) {
+      message += ` (tried: ${attempts.join(', ')})`
+    }
     return Response.json({
       ok: false,
-      model: 'gemini-2.0-flash',
+      model: attempts.at(-1) ?? null,
       latencyMs: 0,
-      message: aborted
-        ? 'Request timed out after 15s — check network access to generativelanguage.googleapis.com.'
-        : 'Verification failed — could not reach the Gemini API.',
+      message,
     })
   }
 }

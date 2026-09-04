@@ -13,6 +13,7 @@ import { useAppStore } from "@/store/app-store";
 import QTBIcon from "@/components/qtb/QTBIcon";
 import QTBButton from "@/components/qtb/QTBButton";
 import { GradientChip } from "@/components/qtb/ui-bits";
+import ToolIcon from "@/components/qtb/ToolIcon";
 import ToolHelpSheet from "@/components/qtb/ToolHelpSheet";
 import {
   Select,
@@ -179,7 +180,7 @@ export default function ToolConvertView() {
       </button>
 
       <div className="flex flex-wrap items-start gap-4">
-        <GradientChip icon="convert" tone="rose" size="lg" />
+        <ToolIcon tool="convert" size={58} />
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-extrabold tracking-tight text-neutral-900 sm:text-3xl">
             {t("cv.title")}

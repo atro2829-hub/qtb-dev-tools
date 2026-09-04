@@ -13,6 +13,7 @@ import { useAppStore } from "@/store/app-store";
 import QTBIcon from "@/components/qtb/QTBIcon";
 import QTBButton from "@/components/qtb/QTBButton";
 import { GradientChip } from "@/components/qtb/ui-bits";
+import ToolIcon from "@/components/qtb/ToolIcon";
 import ToolHelpSheet from "@/components/qtb/ToolHelpSheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -197,7 +198,7 @@ export default function ToolPdfView() {
       </button>
 
       <div className="flex flex-wrap items-start gap-4">
-        <GradientChip icon="pdf" tone="violet" size="lg" />
+        <ToolIcon tool="pdf" size={58} />
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-extrabold tracking-tight text-neutral-900 sm:text-3xl">
             {t("pdf.title")}

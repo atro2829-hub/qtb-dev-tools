@@ -1,4 +1,4 @@
-import { zaiChatCompletion } from '@/lib/server/zai'
+import { zaiChatCompletion, geminiTextGenerate, GeminiTextError } from '@/lib/server/zai'
 import { getSessionUser, unauthorized } from '@/lib/auth'
 import { enforceQuota } from '@/lib/server/quota'
 import { db } from '@/lib/db'
@@ -40,33 +40,6 @@ function extractChatContent(response: unknown): string {
         if (message && typeof message === 'object' && 'content' in message) {
           const content = (message as { content?: unknown }).content
           if (typeof content === 'string') return content
-        }
-      }
-    }
-  }
-  return ''
-}
-
-/** Narrow the Gemini generateContent response to the first candidate's text. */
-function extractGeminiText(response: unknown): string {
-  if (response && typeof response === 'object' && 'candidates' in response) {
-    const candidates = (response as { candidates?: unknown }).candidates
-    if (Array.isArray(candidates) && candidates.length > 0) {
-      const first = candidates[0]
-      if (first && typeof first === 'object' && 'content' in first) {
-        const content = (first as { content?: unknown }).content
-        if (content && typeof content === 'object' && 'parts' in content) {
-          const parts = (content as { parts?: unknown }).parts
-          if (Array.isArray(parts)) {
-            const texts = parts
-              .map((p) =>
-                p && typeof p === 'object' && 'text' in p && typeof (p as { text?: unknown }).text === 'string'
-                  ? (p as { text: string }).text
-                  : ''
-              )
-              .filter(Boolean)
-            return texts.join('')
-          }
         }
       }
     }
@@ -122,22 +95,12 @@ export async function POST(request: Request) {
     const geminiKey = cfg?.geminiApiKey?.trim() ?? ''
 
     if (geminiKey) {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(geminiKey)}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: buildInstruction(sourceLang, targetLang, truncated) }] }],
-          }),
-        }
+      const result = await geminiTextGenerate(
+        geminiKey,
+        [{ parts: [{ text: buildInstruction(sourceLang, targetLang, truncated) }] }],
+        { systemInstruction: SYSTEM_PROMPT, timeoutMs: 90_000 }
       )
-      if (!res.ok) {
-        const errorBody = await res.text().catch(() => '')
-        throw new Error(`Gemini API error ${res.status}: ${errorBody.slice(0, 300)}`)
-      }
-      const json: unknown = await res.json()
-      translated = extractGeminiText(json)
+      translated = result.text
       if (!translated) throw new Error('Gemini returned an empty translation')
     } else {
       const response = await zaiChatCompletion({
@@ -192,7 +155,13 @@ export async function POST(request: Request) {
         .catch((e: unknown) => console.error('[tools/translate] job record failed', e))
     }
     const hint =
-      err instanceof Error && /ZAI API request failed/.test(err.message)
+      err instanceof GeminiTextError
+        ? /location is not supported/i.test(err.message)
+          ? ' The Gemini key rejected this server\'s region ("User location is not supported"). The key itself is valid — deploy the app in a supported region or use a key without regional restrictions.'
+          : /API key not valid|API_KEY_INVALID/i.test(err.message)
+            ? ' The stored Gemini API key is invalid — an admin can update it in Admin → Settings → AI & Agent API Keys.'
+            : ''
+      : err instanceof Error && /ZAI API request failed/.test(err.message)
         ? ' The built-in AI backend is unreachable from this deployment. An admin can add a Gemini API key in Admin → Settings → AI & Agent API Keys to enable translation.'
         : ''
     return Response.json({ error: `Translation failed, please try again.${hint}` }, { status: 502 })

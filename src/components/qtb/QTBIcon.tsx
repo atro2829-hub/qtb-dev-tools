@@ -14,28 +14,45 @@ const REGISTRY = {
   ),
   "remove-bg": (
     <>
-      <rect x="3" y="3" width="18" height="18" rx="3" />
-      <circle cx="9" cy="9" r="2" />
-      <path d="m20.6 15.3-4-4a1.4 1.4 0 0 0-2 0L6.2 19.7" />
-      <path d="M4.4 19.6 19.6 4.4" strokeDasharray="2 2.6" />
+      {/* photo frame with an open top-right corner */}
+      <path d="M20.5 12.5V18a2.5 2.5 0 0 1-2.5 2.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5h5.5" />
+      <circle cx="8.2" cy="8.4" r="1.5" />
+      <path d="m3.9 16.8 4.4-4.9a1.5 1.5 0 0 1 2.2 0l3.5 3.9" />
+      <path d="m12.6 14.1 1.4-1.5a1.5 1.5 0 0 1 2.2 0l1 .9" />
+      {/* AI erase sparkle */}
+      <path
+        d="M17.6 1.9l1.1 2.9 2.9 1.1-2.9 1.1-1.1 2.9-1.1-2.9-2.9-1.1 2.9-1.1z"
+        fill="currentColor"
+        stroke="none"
+      />
+      <path d="M22.1 10.7v.01" strokeWidth="2.4" />
+      <path d="M12.6 1.9v.01" strokeWidth="2.4" />
     </>
   ),
   convert: (
     <>
-      <path d="M8 3 4 7l4 4" />
-      <path d="M4 7h16" />
-      <path d="m16 21 4-4-4-4" />
-      <path d="M20 17H4" />
+      {/* document with folded corner */}
+      <path d="M13.5 2.5H7A2.5 2.5 0 0 0 4.5 5v14A2.5 2.5 0 0 0 7 21.5h10a2.5 2.5 0 0 0 2.5-2.5V8.5z" />
+      <path d="M13.5 2.5v6h6" />
+      {/* format exchange arrows inside the doc */}
+      <path d="M8 12.8h6.5" />
+      <path d="m12.3 10.6 2.2 2.2-2.2 2.2" />
+      <path d="M16 17.2H9.5" />
+      <path d="m11.7 15 2.2 2.2-2.2 2.2" />
     </>
   ),
   translate: (
     <>
-      <path d="M2.5 4.5h9.5" />
-      <path d="M7 2.5v2" />
-      <path d="M3.5 9c1.6 3.4 4.2 5.9 7.5 7.4" />
-      <path d="m10.6 4.5c-1.2 4.5-4.3 8.2-8.1 10.2" />
-      <path d="m13.5 21 4-10.5L21.5 21" />
-      <path d="M14.9 17.4h5.2" />
+      {/* Latin panel: translator strokes */}
+      <path d="M2.5 4h8.5" />
+      <path d="M6.5 2v2" />
+      <path d="M3.6 8.6c1.8 3.1 4.4 5.4 7.5 6.7" />
+      <path d="m10.5 4.3c-1.2 4.4-4.2 7.9-8 9.8" />
+      {/* Arabic ʿayn (ع) stylized */}
+      <path d="M20.9 11.3a3.4 3.4 0 1 0 .1 4.2" />
+      <path d="M21 11.3c.5 3.1-.2 5.7-2 7.5-1.2 1.2-2.8 1.9-4.8 2.1" />
+      {/* exchange tick between scripts */}
+      <path d="m13.2 8.3 2.2-2.2 2.2 2.2" />
     </>
   ),
   shield: (
@@ -326,10 +343,16 @@ const REGISTRY = {
   ),
   pdf: (
     <>
-      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z" />
-      <path d="M14 2v5h5" />
-      <path d="M8.5 13.5h7M8.5 17h4.5" />
-      <path d="M8.5 10h2" />
+      {/* document with folded corner */}
+      <path d="M13.5 2.5H7A2.5 2.5 0 0 0 4.5 5v14A2.5 2.5 0 0 0 7 21.5h10a2.5 2.5 0 0 0 2.5-2.5V8.5z" />
+      <path d="M13.5 2.5v6h6" />
+      {/* dashed split line */}
+      <path d="M7.8 12.5h8.4" strokeDasharray="1.6 2.4" />
+      {/* split / merge arrows */}
+      <path d="M12 10.2V7.6" />
+      <path d="m10.3 9.1 1.7-1.7 1.7 1.7" />
+      <path d="M12 14.8v2.6" />
+      <path d="m10.3 15.9 1.7 1.7 1.7-1.7" />
     </>
   ),
   help: (

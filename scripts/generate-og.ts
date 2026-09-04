@@ -32,9 +32,10 @@ const svg = `
 
   <!-- logo tile -->
   <rect x="72" y="86" width="108" height="108" rx="28" fill="#0a0a0a"/>
-  <circle cx="126" cy="133" r="24" fill="none" stroke="#ffffff" stroke-width="11"/>
-  <line x1="143" y1="150" x2="163" y2="170" stroke="#ffffff" stroke-width="11" stroke-linecap="round"/>
-  <path d="M162 96l4.2 11.4 11.4 4.2-11.4 4.2-4.2 11.4-4.2-11.4-11.4-4.2 11.4-4.2z" fill="url(#sparks)"/>
+  <g transform="translate(94 108) scale(0.2133)"><path fill="#ffffff" d="M150 2 193 46h62v61l43 43-43 44v61h-62l-42 42h-2l-31-32v-2l41-41h2l31 32 2-4v-56h61l-42-43 42-42h-61V47l-43 42-44-42v60l-61 1 42 43-42 43v1h62l63-64v60l-64 65H44v-62L2 151v-2l42-42V46h62l43 3z"/></g>
+  <circle cx="163" cy="103" r="7" fill="url(#sparks)"/>
+  <!-- large watermark mark -->
+  <g transform="translate(925 245) scale(0.62)" opacity="0.85"><path fill="#0a0a0a" d="M150 2 193 46h62v61l43 43-43 44v61h-62l-42 42h-2l-31-32v-2l41-41h2l31 32 2-4v-56h61l-42-43 42-42h-61V47l-43 42-44-42v60l-61 1 42 43-42 43v1h62l63-64v60l-64 65H44v-62L2 151v-2l42-42V46h62l43 3z"/></g>
 
   <text x="206" y="152" font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="800" fill="#0a0a0a" letter-spacing="1">QTB DEV TOOLS</text>
   <rect x="207" y="168" width="196" height="7" rx="3.5" fill="url(#sparks)"/>

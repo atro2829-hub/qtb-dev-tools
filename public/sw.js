@@ -8,7 +8,7 @@
  *  - /api/*:               NEVER cached (always network).
  *  - HMR / cross-origin / range requests: bypassed untouched.
  */
-const VERSION = "qtb-v1";
+const VERSION = "qtb-v2";
 const SHELL_CACHE = `${VERSION}-shell`;
 const ASSET_CACHE = `${VERSION}-assets`;
 

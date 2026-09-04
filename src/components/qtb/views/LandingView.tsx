@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useAppStore, type View } from "@/store/app-store";
 import QTBIcon, { type QTBIconName } from "@/components/qtb/QTBIcon";
+import ToolIcon, { type ToolKey } from "@/components/qtb/ToolIcon";
 import QTBButton from "@/components/qtb/QTBButton";
 import { SectionHeading } from "@/components/qtb/ui-bits";
 
@@ -179,7 +180,11 @@ export default function LandingView() {
                 className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${tool.ring} opacity-70 transition-opacity group-hover:opacity-100`}
               />
               <span className="inline-flex items-center gap-3">
-                <SectionChip icon={tool.icon} tone={tool.tone} />
+                <ToolIcon
+                  tool={viewToToolKey(tool.view)}
+                  size={48}
+                  className="transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110"
+                />
                 <span className="text-lg font-bold text-neutral-900">{t(tool.titleKey)}</span>
               </span>
               <span className="text-sm leading-relaxed text-neutral-500">{t(tool.copyKey)}</span>
@@ -301,24 +306,10 @@ export default function LandingView() {
   );
 }
 
-function SectionChip({
-  icon,
-  tone,
-}: {
-  icon: QTBIconName;
-  tone: "amber" | "rose" | "emerald" | "violet";
-}) {
-  const tones = {
-    amber: "bg-amber-100 text-amber-600",
-    rose: "bg-rose-100 text-rose-600",
-    emerald: "bg-emerald-100 text-emerald-600",
-    violet: "bg-violet-100 text-violet-600",
-  };
-  return (
-    <span
-      className={`inline-flex h-12 w-12 items-center justify-center rounded-xl ${tones[tone]}`}
-    >
-      <QTBIcon name={icon} size={22} />
-    </span>
-  );
+function viewToToolKey(view: View): ToolKey {
+  if (view === "tool-bg") return "bg";
+  if (view === "tool-convert") return "convert";
+  if (view === "tool-translate") return "translate";
+  return "pdf";
 }
+

@@ -131,7 +131,116 @@ export async function zaiImageEdit(body: {
 }
 
 /** Gemini image models to try, in order (image generation/editing capable). */
-const GEMINI_IMAGE_MODELS = ['gemini-2.5-flash-image', 'gemini-2.5-flash-image-preview']
+const GEMINI_IMAGE_MODELS = [
+  'gemini-2.5-flash-image',
+  'gemini-3.6-flash-image',
+  'gemini-2.5-flash-image-preview',
+  'gemini-2.0-flash-preview-image-generation',
+]
+
+/** Gemini text models to try, in order (Google retires old ones regularly). */
+export const GEMINI_TEXT_MODELS = [
+  'gemini-flash-latest',
+  'gemini-3.6-flash',
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+]
+
+export interface GeminiTextResult {
+  text: string
+  model: string
+  latencyMs: number
+}
+
+export class GeminiTextError extends Error {
+  readonly attempts: string[]
+  constructor(message: string, attempts: string[]) {
+    super(message)
+    this.name = 'GeminiTextError'
+    this.attempts = attempts
+  }
+}
+
+/**
+ * Generate text via the Gemini API, trying every text model in order.
+ * Retired/unavailable models are skipped automatically; the error from the
+ * last attempt is surfaced with the list of tried models.
+ */
+export async function geminiTextGenerate(
+  apiKey: string,
+  contents: unknown,
+  opts?: { timeoutMs?: number; systemInstruction?: string }
+): Promise<GeminiTextResult> {
+  const attempts: string[] = []
+  let lastMessage = 'Gemini request failed'
+  for (const model of GEMINI_TEXT_MODELS) {
+    attempts.push(model)
+    const started = Date.now()
+    const controller = new AbortController()
+    const timeout = setTimeout(
+      () => controller.abort(),
+      opts?.timeoutMs ?? 60_000
+    )
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify(
+            opts?.systemInstruction
+              ? { contents, systemInstruction: { parts: [{ text: opts.systemInstruction }] } }
+              : { contents }
+          ),
+        }
+      )
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        let msg = `Gemini API error ${res.status}`
+        try {
+          const parsed = JSON.parse(body) as { error?: { message?: string; status?: string } }
+          if (parsed?.error?.message) msg = parsed.error.message.slice(0, 300)
+        } catch {
+          /* keep generic */
+        }
+        lastMessage = msg
+        // Retired / unknown model → try the next one. Geo/auth errors are
+        // terminal for every model but we still record the message.
+        const retired =
+          res.status === 404 ||
+          /no longer available|not found for API version|is not supported/i.test(msg)
+        if (retired) continue
+        throw new GeminiTextError(msg, attempts)
+      }
+      const json = (await res.json()) as {
+        candidates?: Array<{
+          content?: { parts?: Array<{ text?: string }> }
+        }>
+      }
+      const text = (json.candidates?.[0]?.content?.parts ?? [])
+        .map((p) => (typeof p?.text === 'string' ? p.text : ''))
+        .join('')
+      if (!text) {
+        lastMessage = 'Gemini returned an empty response'
+        continue
+      }
+      return { text, model, latencyMs: Date.now() - started }
+    } catch (err) {
+      if (err instanceof GeminiTextError) throw err
+      if (err instanceof Error && err.name === 'AbortError') {
+        lastMessage = `Gemini request timed out after ${(opts?.timeoutMs ?? 60_000) / 1000}s`
+        continue
+      }
+      lastMessage = err instanceof Error ? err.message : String(err)
+      // Network-level failure: no point hammering the other models.
+      throw new GeminiTextError(lastMessage, attempts)
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+  throw new GeminiTextError(lastMessage, attempts)
+}
 
 export interface GeminiImageResult {
   base64: string

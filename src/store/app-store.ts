@@ -32,6 +32,66 @@ export type View =
   | "admin-requests"
   | "admin-jobs";
 
+/**
+ * Canonical URL for every view. These are REAL paths (shareable, refreshable,
+ * PWA-shortcut-able) served by the optional catch-all route `app/[[...slug]]`.
+ */
+export const VIEW_PATHS: Record<View, string> = {
+  landing: "/",
+  auth: "/login",
+  profile: "/complete-profile",
+  dashboard: "/dashboard",
+  "tool-bg": "/tools/background-remover",
+  "tool-convert": "/tools/converter",
+  "tool-translate": "/tools/translator",
+  "tool-pdf": "/tools/pdf-tools",
+  subscription: "/subscription",
+  notifications: "/notifications",
+  "profile-me": "/profile",
+  "admin-settings": "/admin/settings",
+  "admin-staff": "/admin/staff",
+  "admin-monetization": "/admin/monetization",
+  "admin-notifications": "/admin/broadcast",
+  "admin-banks": "/admin/bank-accounts",
+  "admin-requests": "/admin/requests",
+  "admin-jobs": "/admin/activity",
+};
+
+/** Extra path aliases that map to views (normalized lowercase). */
+const PATH_ALIASES: Record<string, View> = {
+  "/login": "auth",
+  "/signin": "auth",
+  "/register": "auth",
+  "/signup": "auth",
+  "/home": "landing",
+  "/tools": "dashboard",
+  "/tools/bg": "tool-bg",
+  "/tools/remove-bg": "tool-bg",
+  "/tools/convert": "tool-convert",
+  "/tools/translate": "tool-translate",
+  "/tools/pdf": "tool-pdf",
+  "/admin": "admin-settings",
+  "/admin/notifications": "admin-notifications",
+  "/admin/banks": "admin-banks",
+};
+
+/** Resolve a location.pathname to a view, or null when unknown. */
+export function viewFromPath(pathname: string): View | null {
+  if (typeof pathname !== "string") return null;
+  let p = pathname.split("?")[0].split("#")[0];
+  try {
+    p = decodeURIComponent(p);
+  } catch {
+    /* keep raw */
+  }
+  p = p.replace(/\/+$/, "").toLowerCase() || "/";
+  if (p === "/") return "landing";
+  for (const view of Object.keys(VIEW_PATHS) as View[]) {
+    if (VIEW_PATHS[view] === p) return view;
+  }
+  return PATH_ALIASES[p] ?? null;
+}
+
 /** User shape returned by every auth endpoint (never contains password). */
 export interface SessionUser {
   id: string;
@@ -169,7 +229,7 @@ interface AppState {
 
   setUser: (user: SessionUser | null) => void;
   setConfig: (config: SiteConfigPublic | null) => void;
-  setView: (view: View) => void;
+  setView: (view: View, opts?: { push?: boolean }) => void;
   setNotifications: (list: NotificationItem[]) => void;
   setLang: (lang: Lang) => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
@@ -192,7 +252,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setUser: (user) => set({ user }),
   setConfig: (config) => set({ config }),
-  setView: (view) => set({ view }),
+  setView: (view, opts) => {
+    set({ view });
+    // Keep the address bar in sync so every view is a REAL, shareable URL.
+    if (typeof window !== "undefined" && opts?.push !== false) {
+      const target = VIEW_PATHS[view] ?? "/";
+      if (window.location.pathname !== target) {
+        try {
+          window.history.pushState({ qtbView: view }, "", target);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  },
   setNotifications: (notifications) =>
     set({ notifications, unreadCount: computeUnread(notifications) }),
 
@@ -287,22 +360,49 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const current = get().view;
     let view: View = current;
+
+    // Deep link: restore the view from the REAL URL path (e.g. /dashboard,
+    // /tools/translator, /admin/settings). Works for shared links, refreshes
+    // and PWA shortcuts. Legacy ?tool= query strings still honored.
+    if (typeof window !== "undefined") {
+      const fromUrl = viewFromPath(window.location.pathname);
+      if (fromUrl) view = fromUrl;
+      const tool = new URLSearchParams(window.location.search).get("tool");
+      const toolViews: Record<string, View> = {
+        bg: "tool-bg",
+        convert: "tool-convert",
+        translate: "tool-translate",
+        pdf: "tool-pdf",
+      };
+      if (user && user.profileComplete && tool && toolViews[tool]) {
+        view = toolViews[tool];
+      }
+    }
+
     if (user) {
       if (!user.profileComplete) view = "profile";
-      else if (current === "landing") view = "dashboard";
-      // PWA shortcut / deep link: /?tool=bg|convert|translate|pdf
-      if (user.profileComplete && typeof window !== "undefined") {
-        const tool = new URLSearchParams(window.location.search).get("tool");
-        const toolViews: Record<string, View> = {
-          bg: "tool-bg",
-          convert: "tool-convert",
-          translate: "tool-translate",
-          pdf: "tool-pdf",
-        };
-        if (tool && toolViews[tool]) view = toolViews[tool];
-      }
+      else if (view === "landing" && current === "landing") view = "dashboard";
     } else {
       view = "landing";
+    }
+
+    // Role guard: non-admins never land on admin views via URL.
+    if (view.startsWith("admin-")) {
+      const admin =
+        user && (user.role === "admin" || user.role === "super_admin");
+      if (!admin) view = user ? "dashboard" : "landing";
+    }
+
+    // Normalize the address bar to the canonical path of the final view.
+    if (typeof window !== "undefined") {
+      const target = VIEW_PATHS[view] ?? "/";
+      if (window.location.pathname !== target) {
+        try {
+          window.history.replaceState({ qtbView: view }, "", target);
+        } catch {
+          /* ignore */
+        }
+      }
     }
 
     set({
@@ -322,6 +422,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       /* clear locally regardless */
     }
     set({ user: null, notifications: [], unreadCount: 0, view: "landing" });
+    if (typeof window !== "undefined" && window.location.pathname !== "/") {
+      try {
+        window.history.pushState({ qtbView: "landing" }, "", "/");
+      } catch {
+        /* ignore */
+      }
+    }
   },
 }));
 

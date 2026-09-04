@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, apiJson } from "@/lib/client-api";
 import { useQtbToast } from "@/components/qtb/use-qtb-toast";
 import QTBIcon from "@/components/qtb/QTBIcon";
@@ -93,6 +93,37 @@ function normalizeConfig(raw: unknown): FullConfig {
 /* Reusable bits                                                       */
 /* ------------------------------------------------------------------ */
 
+/** Read an image file and downscale it to a compact inline PNG data URL. */
+async function fileToLogoDataUrl(file: File, max = 256): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Please choose an image file (PNG, SVG, WebP…)");
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    throw new Error("Image is too large (max 8MB)");
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("Could not read that image"));
+      el.src = url;
+    });
+    const scale = Math.min(1, max / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas not supported in this browser");
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL("image/png");
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 function SecretInput({
   id,
   label,
@@ -143,6 +174,8 @@ export default function AdminSettingsView() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [verifyingGemini, setVerifyingGemini] = useState(false);
   const [geminiVerify, setGeminiVerify] = useState<GeminiVerifyResult | null>(null);
+  const logoFileRef = useRef<HTMLInputElement | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -264,28 +297,72 @@ export default function AdminSettingsView() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="cfg-logo">Logo URL</Label>
+            <Label htmlFor="cfg-logo">Logo</Label>
             <Input
               id="cfg-logo"
               value={config.logoUrl}
               onChange={(e) => patch({ logoUrl: e.target.value })}
-              placeholder="https://…/logo.png"
-              maxLength={5000}
+              placeholder="https://…/logo.png — or upload a file below"
+              maxLength={200000}
             />
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={logoFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  setUploadingLogo(true);
+                  try {
+                    const dataUrl = await fileToLogoDataUrl(file);
+                    patch({ logoUrl: dataUrl });
+                    toast.success("Logo ready", "Press “Save Developer Info” to publish it.");
+                  } catch (err) {
+                    toast.error(err, "Upload failed");
+                  } finally {
+                    setUploadingLogo(false);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                disabled={uploadingLogo}
+                onClick={() => logoFileRef.current?.click()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 transition-colors hover:bg-neutral-50 disabled:opacity-60"
+              >
+                {uploadingLogo ? (
+                  <span className="qtb-spinner" aria-hidden />
+                ) : (
+                  <QTBIcon name="upload-cloud" size={14} />
+                )}
+                Upload from device
+              </button>
+              {config.logoUrl.trim() && (
+                <button
+                  type="button"
+                  onClick={() => patch({ logoUrl: "" })}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-50"
+                >
+                  <QTBIcon name="refresh" size={14} />
+                  Use default mark
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-4 rounded-xl border border-dashed border-neutral-200 bg-neutral-50/60 p-4">
               {config.logoUrl.trim() ? (
                 <QTBLogo logoUrl={config.logoUrl.trim()} size={48} withWordmark />
               ) : (
                 <>
-                  <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-dashed border-neutral-300 bg-white text-neutral-300">
-                    <QTBIcon name="image" size={22} />
-                  </span>
+                  <QTBLogo size={48} tile withWordmark />
                   <div>
                     <p className="text-sm font-semibold text-neutral-600">
-                      Default QTB logo in use
+                      Official QTB mark in use
                     </p>
                     <p className="text-xs text-neutral-400">
-                      Paste an image URL above to preview a custom logo.
+                      Upload an image or paste a URL to override it everywhere.
                     </p>
                   </div>
                 </>

@@ -8,6 +8,7 @@ import { useQtbToast } from "@/components/qtb/use-qtb-toast";
 import QTBIcon from "@/components/qtb/QTBIcon";
 import QTBButton from "@/components/qtb/QTBButton";
 import { GradientChip } from "@/components/qtb/ui-bits";
+import ToolIcon from "@/components/qtb/ToolIcon";
 import ToolHelpSheet from "@/components/qtb/ToolHelpSheet";
 import { cn } from "@/lib/utils";
 
@@ -97,7 +98,7 @@ export default function ToolBgRemoveView() {
       </button>
 
       <div className="flex flex-wrap items-start gap-4">
-        <GradientChip icon="remove-bg" tone="amber" size="lg" />
+        <ToolIcon tool="bg" size={58} />
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-extrabold tracking-tight text-neutral-900 sm:text-3xl">
             {t("bg.title")}

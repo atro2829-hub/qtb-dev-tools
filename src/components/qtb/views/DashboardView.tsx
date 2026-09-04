@@ -14,6 +14,7 @@ import {
 import QTBIcon, { type QTBIconName } from "@/components/qtb/QTBIcon";
 import QTBButton from "@/components/qtb/QTBButton";
 import { GradientChip, StatusPill, EmptyState } from "@/components/qtb/ui-bits";
+import ToolIcon, { type ToolKey } from "@/components/qtb/ToolIcon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -100,6 +101,13 @@ const TOOL_CARDS: {
     copyKey: "pdf.sub",
   },
 ];
+
+function viewToToolKey(view: View): ToolKey {
+  if (view === "tool-bg") return "bg";
+  if (view === "tool-convert") return "convert";
+  if (view === "tool-translate") return "translate";
+  return "pdf";
+}
 
 function jobIcon(toolType: string): QTBIconName {
   const t = toolType.toLowerCase();
@@ -306,9 +314,9 @@ export default function DashboardView() {
             <span
               className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${tool.ring} opacity-75 transition-opacity group-hover:opacity-100`}
             />
-            <GradientChip
-              icon={tool.icon}
-              tone={tool.tone}
+            <ToolIcon
+              tool={viewToToolKey(tool.view)}
+              size={52}
               className="transition-transform duration-300 group-hover:-rotate-6 group-hover:scale-110"
             />
             <h3 className="mt-4 text-lg font-bold text-neutral-900">{t(tool.titleKey)}</h3>

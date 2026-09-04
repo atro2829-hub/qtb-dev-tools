@@ -6,7 +6,7 @@
       <stop offset="100%" stop-color="#10b981"/>
     </linearGradient>
   </defs>
-  <rect x="2" y="2" width="60" height="60" rx="16" fill="#0a0a0a"/>
-  <path d="M40.5 25.5a10.5 10.5 0 1 0 0 13 10.5 10.5 0 0 0 0-13zM36 38.5l9 9" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
-  <path d="M49 9l1.6 4.4L55 15l-4.4 1.6L49 21l-1.6-4.4L43 15l4.4-1.6z" fill="url(#qtb-spark)"/>
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="#0a0a0a"/>
+  <path transform="translate(13.25 13.5) scale(0.125)" fill="#ffffff" d="M150 2 193 46h62v61l43 43-43 44v61h-62l-42 42h-2l-31-32v-2l41-41h2l31 32 2-4v-56h61l-42-43 42-42h-61V47l-43 42-44-42v60l-61 1 42 43-42 43v1h62l63-64v60l-64 65H44v-62L2 151v-2l42-42V46h62l43 3z"/>
+  <circle cx="51" cy="12.5" r="4" fill="url(#qtb-spark)"/>
 </svg>

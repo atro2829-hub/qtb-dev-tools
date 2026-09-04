@@ -7,13 +7,14 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const MAX_STR = 5000
+const MAX_LOGO = 200_000 // allows an inline data-URL logo (~150KB image)
 
 const configUpdateSchema = z.object({
   organization: z.string().max(MAX_STR).optional(),
   devName: z.string().max(MAX_STR).optional(),
   devEmail: z.string().max(MAX_STR).optional(),
   supportEmail: z.string().max(MAX_STR).optional(),
-  logoUrl: z.string().max(MAX_STR).optional(),
+  logoUrl: z.string().max(MAX_LOGO).optional(),
   geminiApiKey: z.string().max(MAX_STR).optional(),
   agentApiKey: z.string().max(MAX_STR).optional(),
   admobAppId: z.string().max(MAX_STR).optional(),
