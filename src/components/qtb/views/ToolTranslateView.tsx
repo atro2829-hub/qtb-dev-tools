@@ -7,7 +7,7 @@ import { useQtbToast } from "@/components/qtb/use-qtb-toast";
 import { useAppStore } from "@/store/app-store";
 import QTBIcon from "@/components/qtb/QTBIcon";
 import QTBButton from "@/components/qtb/QTBButton";
-import { GradientChip } from "@/components/qtb/ui-bits";
+import { GradientChip, EmptyState } from "@/components/qtb/ui-bits";
 import ToolIcon from "@/components/qtb/ToolIcon";
 import ToolHelpSheet from "@/components/qtb/ToolHelpSheet";
 import {
@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import ToolRecentRuns from "@/components/qtb/ToolRecentRuns";
 import { cn } from "@/lib/utils";
 
 const MAX_SIZE = 12 * 1024 * 1024;
@@ -292,16 +293,8 @@ export default function ToolTranslateView() {
               </QTBButton>
             </motion.div>
           ) : (
-            <div className="flex min-h-56 flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 bg-neutral-50/60 p-8 text-center">
-              <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-400">
-                <QTBIcon name="globe" size={26} />
-              </span>
-              <p className="text-sm font-semibold text-neutral-700">
-                {t("tr.placeholder")}
-              </p>
-              <p className="max-w-xs text-xs text-neutral-500">
-                {t("tr.placeholderSub")}
-              </p>
+            <div className="flex min-h-56 items-center justify-center rounded-2xl border border-neutral-100 bg-neutral-50/60 p-8">
+              <EmptyState icon="globe" title={t("tr.placeholder")} description={t("tr.placeholderSub")} />
             </div>
           )}
         </div>
@@ -318,6 +311,8 @@ export default function ToolTranslateView() {
           <QTBIcon name="globe" size={17} /> {t("tr.translate")}
         </QTBButton>
       </div>
+
+      <ToolRecentRuns view="tool-translate" />
     </div>
   );
 }

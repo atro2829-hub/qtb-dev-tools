@@ -18,6 +18,7 @@ import ToolHelpSheet from "@/components/qtb/ToolHelpSheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import ToolRecentRuns from "@/components/qtb/ToolRecentRuns";
 import { cn } from "@/lib/utils";
 
 const MAX_TOTAL = 30 * 1024 * 1024; // 30 MB combined for merge
@@ -416,6 +417,8 @@ export default function ToolPdfView() {
           <QTBIcon name="pdf" size={17} /> {mode === "merge" ? t("pdf.mergeNow") : t("pdf.extract")}
         </QTBButton>
       </div>
+
+      <ToolRecentRuns view="tool-pdf" />
     </div>
   );
 }

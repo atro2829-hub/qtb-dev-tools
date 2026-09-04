@@ -113,6 +113,11 @@ const en: Dict = {
   "dash.trialLeft": "{days} days left in trial",
   "dash.upgrade": "Upgrade",
 
+  // Per-tool recent runs strip
+  "runs.title": "Your recent runs",
+  "runs.viewAll": "View all activity",
+  "runs.recentHint": "Latest runs with this tool — the full history lives in your dashboard activity.",
+
   // Tools (shared)
   "tool.back": "Back to dashboard",
   "tool.upload": "Upload a file",
@@ -774,6 +779,11 @@ const ar: Dict = {
   "dash.freePlan": "الخطة المجانية",
   "dash.trialLeft": "{days} يوماً متبقياً في التجربة",
   "dash.upgrade": "الترقية",
+
+  // Per-tool recent runs strip
+  "runs.title": "أحدث استخداماتك لهذه الأداة",
+  "runs.viewAll": "عرض كل النشاط",
+  "runs.recentHint": "آخر العمليات على هذه الأداة — السجل الكامل في نشاط لوحة التحكم.",
 
   // Tools (shared)
   "tool.back": "العودة إلى لوحة التحكم",

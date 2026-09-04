@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import ToolRecentRuns from "@/components/qtb/ToolRecentRuns";
 import { cn } from "@/lib/utils";
 
 const DOC_EXTS = ["pdf", "docx", "doc", "txt"];
@@ -388,6 +389,8 @@ export default function ToolConvertView() {
           <QTBIcon name="convert" size={17} /> {t("tool.convert")}
         </QTBButton>
       </div>
+
+      <ToolRecentRuns view="tool-convert" />
     </div>
   );
 }

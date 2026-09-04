@@ -7,7 +7,7 @@ import { useQtbToast } from "@/components/qtb/use-qtb-toast";
 import { useAppStore } from "@/store/app-store";
 import QTBIcon from "@/components/qtb/QTBIcon";
 import QTBButton from "@/components/qtb/QTBButton";
-import { GradientChip } from "@/components/qtb/ui-bits";
+import { GradientChip, EmptyState } from "@/components/qtb/ui-bits";
 import ToolIcon from "@/components/qtb/ToolIcon";
 import ToolHelpSheet from "@/components/qtb/ToolHelpSheet";
 import {
@@ -18,6 +18,7 @@ import {
   type SmartAudioDoc,
 } from "@/lib/client-audio-pdf";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import ToolRecentRuns from "@/components/qtb/ToolRecentRuns";
 import { cn } from "@/lib/utils";
 
 const MAX_BYTES = 14 * 1024 * 1024; // 14 MB
@@ -582,9 +583,21 @@ export default function ToolAudioView() {
               className="space-y-4"
             >
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4">
-                <p className="text-base font-extrabold text-neutral-900">{doc.title}</p>
-                {doc.subtitle && <p className="mt-0.5 text-xs text-neutral-500">{doc.subtitle}</p>}
-                <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-bold">
+                <div className="flex items-start gap-3">
+                  <motion.span
+                    initial={{ scale: 0, rotate: -30 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: "spring", stiffness: 320, damping: 16, delay: 0.05 }}
+                    className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-200"
+                  >
+                    <QTBIcon name="check" size={16} strokeWidth={3} />
+                  </motion.span>
+                  <div className="min-w-0">
+                    <p className="text-base font-extrabold text-neutral-900">{doc.title}</p>
+                    {doc.subtitle && <p className="mt-0.5 text-xs text-neutral-500">{doc.subtitle}</p>}
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5 ps-11 text-[11px] font-bold">
                   <span className="rounded-full bg-white px-2.5 py-1 text-neutral-600 ring-1 ring-neutral-200">
                     {doc.wordCount.toLocaleString("en-US")} {t("au.words")}
                   </span>
@@ -693,12 +706,8 @@ export default function ToolAudioView() {
               )}
             </motion.div>
           ) : (
-            <div className="flex min-h-52 flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-100 bg-neutral-50/60 p-8 text-center">
-              <span className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-400">
-                <QTBIcon name="mic" size={26} />
-              </span>
-              <p className="text-sm font-semibold text-neutral-700">{t("au.resultEmpty")}</p>
-              <p className="max-w-xs text-xs text-neutral-500">{t("au.resultEmptySub")}</p>
+            <div className="flex min-h-52 items-center justify-center rounded-2xl border border-neutral-100 bg-neutral-50/60 p-8">
+              <EmptyState icon="mic" title={t("au.resultEmpty")} description={t("au.resultEmptySub")} />
             </div>
           )}
         </div>
@@ -715,6 +724,8 @@ export default function ToolAudioView() {
           <QTBIcon name="sparkles" size={17} /> {t("au.run")}
         </QTBButton>
       </div>
+
+      <ToolRecentRuns view="tool-audio" />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import QTBButton from "@/components/qtb/QTBButton";
 import { GradientChip } from "@/components/qtb/ui-bits";
 import ToolIcon from "@/components/qtb/ToolIcon";
 import ToolHelpSheet from "@/components/qtb/ToolHelpSheet";
+import ToolRecentRuns from "@/components/qtb/ToolRecentRuns";
 import { cn } from "@/lib/utils";
 
 const MAX_SIZE = 12 * 1024 * 1024; // 12MB
@@ -254,6 +255,8 @@ export default function ToolBgRemoveView() {
           <QTBIcon name="sparkles" size={17} /> {t("bg.removeBg")}
         </QTBButton>
       </div>
+
+      <ToolRecentRuns view="tool-bg" />
     </div>
   );
 }
