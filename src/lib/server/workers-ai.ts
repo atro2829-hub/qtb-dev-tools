@@ -121,14 +121,15 @@ export async function workersAiTranscribe(
   ]
 
   const attempts: string[] = []
+  const errors: string[] = []
   let lastError = 'Workers AI transcription failed'
   for (const model of WORKERS_AI_STT_MODELS) {
     attempts.push(model)
-    for (const input of representations) {
+    for (let i = 0; i < representations.length; i++) {
       try {
         const run = ai.run.bind(ai)
         const raw = (await Promise.race([
-          run(model, input),
+          run(model, representations[i]),
           new Promise((_, reject) =>
             setTimeout(
               () => reject(new Error('Workers AI transcription timed out')),
@@ -139,14 +140,16 @@ export async function workersAiTranscribe(
         const text = extractTranscript(raw)
         if (text.trim()) return { text, model }
         lastError = 'Workers AI returned an empty transcript'
+        errors.push(`${model}#${i}: empty`)
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err)
+        errors.push(`${model}#${i}: ${lastError.slice(0, 120)}`)
         // Schema-validation failures → try the next representation.
         if (!/5006|required properties|invalid|schema/i.test(lastError)) break
       }
     }
   }
-  throw new Error(`${lastError} (tried: ${attempts.join(', ')})`)
+  throw new Error(`${lastError} | all: ${errors.join(' ;; ').slice(0, 800)}`)
 }
 
 /**
