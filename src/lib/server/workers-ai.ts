@@ -109,30 +109,41 @@ export async function workersAiTranscribe(
   const exact =
     audio.byteOffset === 0 && audio.byteLength === audio.buffer.byteLength
       ? (audio.buffer as ArrayBuffer)
-      : new Uint8Array(audio).buffer as ArrayBuffer
-  const binary = { body: exact, contentType: mimeType || 'audio/wav' }
+      : (new Uint8Array(audio).buffer as ArrayBuffer)
+  const type = mimeType || 'audio/wav'
+  // The AI binding's binary-format validator accepts different shapes across
+  // model versions — try them all until one passes schema validation.
+  const representations: Record<string, unknown>[] = [
+    { audio: new Blob([exact], { type }) },
+    { audio: { body: new Blob([exact], { type }), contentType: type } },
+    { audio: { body: exact, contentType: type } },
+    { audio: exact },
+  ]
 
   const attempts: string[] = []
   let lastError = 'Workers AI transcription failed'
   for (const model of WORKERS_AI_STT_MODELS) {
     attempts.push(model)
-    try {
-      const run = ai.run.bind(ai)
-      const input: Record<string, unknown> = { audio: binary }
-      const raw = (await Promise.race([
-        run(model, input),
-        new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error('Workers AI transcription timed out')),
-            opts?.timeoutMs ?? 110_000
-          )
-        ),
-      ])) as unknown
-      const text = extractTranscript(raw)
-      if (text.trim()) return { text, model }
-      lastError = 'Workers AI returned an empty transcript'
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err)
+    for (const input of representations) {
+      try {
+        const run = ai.run.bind(ai)
+        const raw = (await Promise.race([
+          run(model, input),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Workers AI transcription timed out')),
+              opts?.timeoutMs ?? 110_000
+            )
+          ),
+        ])) as unknown
+        const text = extractTranscript(raw)
+        if (text.trim()) return { text, model }
+        lastError = 'Workers AI returned an empty transcript'
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err)
+        // Schema-validation failures → try the next representation.
+        if (!/5006|required properties|invalid|schema/i.test(lastError)) break
+      }
     }
   }
   throw new Error(`${lastError} (tried: ${attempts.join(', ')})`)
