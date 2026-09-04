@@ -92,6 +92,13 @@ export default function ToolRecentRuns({ view }: { view: View }) {
     [jobs, view]
   );
 
+  // Success-rate stats across ALL of this tool's runs on the loaded page.
+  const stats = useMemo(() => {
+    const mine = (jobs ?? []).filter((j) => jobView(j.toolType) === view);
+    const ok = mine.filter((j) => statusMeta(j.status).ok).length;
+    return { n: mine.length, pct: mine.length ? Math.round((ok / mine.length) * 100) : 0 };
+  }, [jobs, view]);
+
   // Hidden entirely until data proves there is history (keeps first-run clean).
   if (jobs === null || runs.length === 0) return null;
 
@@ -101,10 +108,25 @@ export default function ToolRecentRuns({ view }: { view: View }) {
       className="mt-8 rounded-2xl border border-neutral-200 bg-white p-5"
     >
       <div className="mb-3.5 flex items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-bold text-neutral-900">
-          <QTBIcon name="history" size={15} className="text-fuchsia-500" />
-          {t("runs.title")}
-        </h2>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-neutral-900">
+            <QTBIcon name="history" size={15} className="text-fuchsia-500" />
+            {t("runs.title")}
+          </h2>
+          <span
+            title={t("runs.recentHint")}
+            className={cn(
+              "hidden rounded-full px-2.5 py-1 text-[10px] font-bold tabular-nums ring-1 sm:inline-flex",
+              stats.pct >= 90
+                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                : stats.pct >= 70
+                  ? "bg-amber-50 text-amber-700 ring-amber-200"
+                  : "bg-rose-50 text-rose-700 ring-rose-200"
+            )}
+          >
+            {t(stats.n === 1 ? "runs.stats" : "runs.statsPlural", { n: stats.n, pct: stats.pct })}
+          </span>
+        </div>
         <button
           type="button"
           onClick={() => setView("dashboard")}

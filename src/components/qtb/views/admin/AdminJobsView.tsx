@@ -195,7 +195,8 @@ export default function AdminJobsView() {
           size="sm"
           onClick={() => {
             const toolQs = tool !== "all" ? `&tool=${encodeURIComponent(tool)}` : "";
-            window.location.href = `/api/admin/jobs?format=csv${toolQs}`;
+            const statusQs = statusFilter !== "all" ? `&status=${statusFilter}` : "";
+            window.location.href = `/api/admin/jobs?format=csv${toolQs}${statusQs}`;
           }}
         >
           <QTBIcon name="download" size={14} /> Export CSV

@@ -117,6 +117,8 @@ const en: Dict = {
   "runs.title": "Your recent runs",
   "runs.viewAll": "View all activity",
   "runs.recentHint": "Latest runs with this tool — the full history lives in your dashboard activity.",
+  "runs.stats": "{n} run · {pct}% succeeded",
+  "runs.statsPlural": "{n} runs · {pct}% succeeded",
 
   // Tools (shared)
   "tool.back": "Back to dashboard",
@@ -238,6 +240,8 @@ const en: Dict = {
   "au.copyFailed": "Copy failed",
   "au.showTranscript": "Show raw transcript",
   "au.hideTranscript": "Hide raw transcript",
+  "au.copyMarkdown": "Markdown",
+  "au.mdCopiedSub": "The document was copied as Markdown — paste it into Notion, Obsidian or any editor.",
   "au.resultEmpty": "Nothing here yet",
   "au.resultEmptySub": "Add an audio recording, pick a style, then press “Transcribe & organize”.",
   "au.wrongType": "Unsupported file",
@@ -411,6 +415,9 @@ const en: Dict = {
 
   // Dashboard (extra)
   "dash.hello": "Welcome back, {name}",
+  "dash.greeting.morning": "Good morning",
+  "dash.greeting.afternoon": "Good afternoon",
+  "dash.greeting.evening": "Good evening",
   "dash.onFreePlan": "You're on the Free Plan",
   "dash.quotaResetHint": "Your free uses reset at midnight UTC — or upgrade for unlimited runs.",
   "dash.unlockHint": "Unlock all tools with unlimited daily runs.",
@@ -784,6 +791,8 @@ const ar: Dict = {
   "runs.title": "أحدث استخداماتك لهذه الأداة",
   "runs.viewAll": "عرض كل النشاط",
   "runs.recentHint": "آخر العمليات على هذه الأداة — السجل الكامل في نشاط لوحة التحكم.",
+  "runs.stats": "عملية واحدة · {pct}% نجحت",
+  "runs.statsPlural": "{n} عمليات · {pct}% نجحت",
 
   // Tools (shared)
   "tool.back": "العودة إلى لوحة التحكم",
@@ -905,6 +914,8 @@ const ar: Dict = {
   "au.copyFailed": "فشل النسخ",
   "au.showTranscript": "إظهار النص الخام",
   "au.hideTranscript": "إخفاء النص الخام",
+  "au.copyMarkdown": "Markdown",
+  "au.mdCopiedSub": "تم نسخ المستند بصيغة Markdown — الصقه في Notion أو Obsidian أو أي محرر.",
   "au.resultEmpty": "لا يوجد شيء بعد",
   "au.resultEmptySub": "أضف تسجيلاً صوتياً، اختر النمط، ثم اضغط «تفريغ وترتيب ذكي».",
   "au.wrongType": "ملف غير مدعوم",
@@ -1078,6 +1089,9 @@ const ar: Dict = {
 
   // Dashboard (extra)
   "dash.hello": "أهلاً بعودتك، {name}",
+  "dash.greeting.morning": "صباح الخير",
+  "dash.greeting.afternoon": "مساء الخير",
+  "dash.greeting.evening": "مساء الخير",
   "dash.onFreePlan": "أنت على الخطة المجانية",
   "dash.quotaResetHint":
     "تتجدد استخداماتك المجانية في منتصف الليل بتوقيت UTC — أو رقِّ حسابك لاستخدام غير محدود.",

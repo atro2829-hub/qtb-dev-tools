@@ -244,6 +244,12 @@ export default function DashboardView() {
   const trialExpired = daysLeft !== null && daysLeft < 0;
   const firstName = (user?.name ?? "there").split(" ")[0];
 
+  // Time-of-day greeting (visitor's local clock) with a matching emoji.
+  const hour = new Date().getHours();
+  const greetKey =
+    hour < 12 ? "dash.greeting.morning" : hour < 17 ? "dash.greeting.afternoon" : "dash.greeting.evening";
+  const greetIcon = hour < 12 ? "☀️" : hour < 17 ? "🌤️" : "🌙";
+
   // Per-tool usage counts from the already-fetched recent jobs (no extra API).
   const usageByView = useMemo(() => {
     const m = new Map<View, number>();
@@ -263,7 +269,9 @@ export default function DashboardView() {
             {t("dash.eyebrow")}
           </p>
           <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-neutral-900 sm:text-3xl">
-            {t("dash.hello", { name: firstName })} {String.fromCodePoint(0x1f44b)}
+            {lang === "ar"
+              ? `${t(greetKey)}، ${firstName}`
+              : `${t(greetKey)}, ${firstName}`} {greetIcon}
           </h1>
           <p className="mt-1 text-sm text-neutral-500">{t("dash.welcomeSub")}</p>
         </div>

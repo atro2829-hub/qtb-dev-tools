@@ -44,6 +44,10 @@ export interface AudioPdfMeta {
   /** Optional site logo (admin setting) drawn in the header tile. */
   logoUrl?: string;
   engine?: string;
+  /** Optional localized section labels for the Markdown export. */
+  summaryLabel?: string;
+  keyPointsLabel?: string;
+  conclusionLabel?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -795,6 +799,35 @@ export function smartDocToPlainText(doc: SmartAudioDoc, meta: AudioPdfMeta): str
     out.push("=== " + doc.conclusion);
   }
   return out.join("\n");
+}
+
+/**
+ * GitHub-flavored Markdown export — headings, bullet lists and a meta line,
+ * ready to paste into Notion / Obsidian / any Markdown editor.
+ */
+export function smartDocToMarkdown(doc: SmartAudioDoc, meta: AudioPdfMeta): string {
+  const out: string[] = [];
+  out.push(`# ${doc.title}`);
+  if (doc.subtitle) out.push(`**${doc.subtitle}**`);
+  out.push("");
+  const metaBits = [meta.processedAt, meta.sourceFile, meta.styleLabel].filter(Boolean);
+  if (metaBits.length) out.push(`> ${metaBits.join(" · ")}`, "");
+  if (doc.summary) out.push(`## ${meta.summaryLabel || "Summary"}`, "", doc.summary, "");
+  if (doc.keyPoints?.length) {
+    out.push(`## ${meta.keyPointsLabel || "Key points"}`, "");
+    for (const kp of doc.keyPoints) out.push(`- ${kp}`);
+    out.push("");
+  }
+  for (const s of doc.sections ?? []) {
+    if (s.heading) out.push(`## ${s.heading}`, "");
+    for (const p of s.paragraphs) out.push(p, "");
+    if (s.bullets.length) {
+      for (const b of s.bullets) out.push(`- ${b}`);
+      out.push("");
+    }
+  }
+  if (doc.conclusion) out.push(`## ${meta.conclusionLabel || "Conclusion"}`, "", doc.conclusion, "");
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
 }
 
 /* ------------------------------------------------------------------ */

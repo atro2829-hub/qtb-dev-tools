@@ -13,6 +13,7 @@ import ToolHelpSheet from "@/components/qtb/ToolHelpSheet";
 import {
   downloadBlob,
   sanitizeFileBase,
+  smartDocToMarkdown,
   smartDocToPdf,
   smartDocToPlainText,
   type SmartAudioDoc,
@@ -289,6 +290,26 @@ export default function ToolAudioView() {
     try {
       await navigator.clipboard.writeText(smartDocToPlainText(result.doc, { sourceFile: file?.name ?? "", styleLabel: "", processedAt: "" }));
       toast.success(t("au.copied"), t("au.copiedSub"));
+    } catch {
+      toast.error(new Error("Clipboard unavailable"), t("au.copyFailed"));
+    }
+  };
+
+  /** GitHub-flavored Markdown copy — headings/bullets ready for Notion/Obsidian. */
+  const copyMarkdown = async () => {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(
+        smartDocToMarkdown(result.doc, {
+          sourceFile: file?.name ?? "",
+          styleLabel: t(`au.style.${style}`),
+          processedAt: new Date().toLocaleString(lang === "ar" ? "ar" : "en-US"),
+          summaryLabel: t("au.summaryLabel"),
+          keyPointsLabel: t("au.keyPointsLabel"),
+          conclusionLabel: t("au.conclusionLabel"),
+        })
+      );
+      toast.success(t("au.copied"), t("au.mdCopiedSub"));
     } catch {
       toast.error(new Error("Clipboard unavailable"), t("au.copyFailed"));
     }
@@ -685,6 +706,9 @@ export default function ToolAudioView() {
                   }}
                 >
                   <QTBIcon name="file-text" size={15} /> TXT
+                </QTBButton>
+                <QTBButton variant="outline" onClick={copyMarkdown}>
+                  <QTBIcon name="copy" size={15} /> {t("au.copyMarkdown")}
                 </QTBButton>
                 <QTBButton variant="outline" onClick={copyText}>
                   <QTBIcon name="copy" size={15} /> {t("au.copyText")}
