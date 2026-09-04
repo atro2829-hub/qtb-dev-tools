@@ -94,6 +94,19 @@ function extractTranscript(raw: unknown): string {
 }
 
 /**
+ * Chunked ArrayBuffer → base64 (btoa needs a JS string; large buffers must be
+ * fed in slices to avoid call-stack and memory blowups on the Workers runtime).
+ */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+  }
+  return btoa(binary)
+}
+
+/**
  * Transcribe an audio recording with Workers AI (runs inside Cloudflare —
  * region-independent, no Gemini geo-block). Tries every STT model in order.
  */
@@ -105,19 +118,17 @@ export async function workersAiTranscribe(
   const ai = getWorkersAi()
   if (!ai) throw new Error('Workers AI is not available in this runtime')
 
-  // The binding's binary input schema wants { body, contentType }.
-  const exact =
-    audio.byteOffset === 0 && audio.byteLength === audio.buffer.byteLength
-      ? (audio.buffer as ArrayBuffer)
-      : (new Uint8Array(audio).buffer as ArrayBuffer)
+  // The AI binding serializes inputs as JSON — the documented binary format
+  // is a BASE64 STRING ("string, format: binary" in the model schema; the
+  // official chunking tutorial passes `audio: base64String`). Some models
+  // (deepgram nova-3) instead accept { body, contentType } with the same
+  // base64 body. Blobs/ArrayBuffers can never pass JSON-schema validation.
+  const bytes = audio instanceof Uint8Array ? audio : new Uint8Array(audio)
+  const b64 = bytesToBase64(bytes)
   const type = mimeType || 'audio/wav'
-  // The AI binding's binary-format validator accepts different shapes across
-  // model versions — try them all until one passes schema validation.
   const representations: Record<string, unknown>[] = [
-    { audio: new Blob([exact], { type }) },
-    { audio: { body: new Blob([exact], { type }), contentType: type } },
-    { audio: { body: exact, contentType: type } },
-    { audio: exact },
+    { audio: b64 },
+    { audio: { body: b64, contentType: type } },
   ]
 
   const attempts: string[] = []
@@ -145,7 +156,8 @@ export async function workersAiTranscribe(
         lastError = err instanceof Error ? err.message : String(err)
         errors.push(`${model}#${i}: ${lastError.slice(0, 120)}`)
         // Schema-validation failures → try the next representation.
-        if (!/5006|required properties|invalid|schema/i.test(lastError)) break
+        // Real inference failures (timeout/gateway) → skip to the next model.
+        if (!/5006|8001|required properties|invalid|schema|mismatch/i.test(lastError)) break
       }
     }
   }
