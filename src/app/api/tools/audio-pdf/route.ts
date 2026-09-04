@@ -437,7 +437,8 @@ export async function POST(request: Request) {
         .catch((e: unknown) => console.error('[tools/audio-pdf] job record failed', e))
     }
     let hint = ''
-    if (err instanceof GeminiTextError && /location is not supported/i.test(err.message)) {
+    const errMessage = err instanceof Error ? err.message : String(err)
+    if (err instanceof GeminiTextError && /location is not supported/i.test(errMessage)) {
       hint = ' The Gemini key is valid, but Google geo-blocks this server region, and the Workers AI fallback also failed (its free daily quota may be exhausted — it resets at 00:00 UTC).'
     } else if (
       err instanceof GeminiTextError &&
@@ -446,11 +447,14 @@ export async function POST(request: Request) {
       hint = ' The stored Gemini API key is invalid — an admin can update it in Admin → Settings.'
     } else if (err instanceof Error && /ZAI API request failed|ZAI ASR/.test(err.message)) {
       hint = ' No AI transcription backend is reachable in this deployment. An admin should add a Gemini API key in Admin → Settings.'
-    } else if (err instanceof Error && /1214|30秒|0-30/i.test(err.message)) {
+    } else if (err instanceof Error && /1214|30秒|0-30/i.test(errMessage)) {
       hint = ' The local development ASR fallback only supports clips under 30 seconds — production (Gemini / Workers AI) handles long recordings.'
     }
     return Response.json(
-      { error: `Audio processing failed, please try again.${hint}` },
+      {
+        error: `Audio processing failed, please try again.${hint}`,
+        detail: errMessage.slice(0, 400),
+      },
       { status: 502 }
     )
   }

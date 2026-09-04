@@ -104,6 +104,12 @@ export async function workersAiTranscribe(
   const ai = getWorkersAi()
   if (!ai) throw new Error('Workers AI is not available in this runtime')
 
+  // The binding's binary input accepts an exactly-sized ArrayBuffer.
+  const exact =
+    audio.byteOffset === 0 && audio.byteLength === audio.buffer.byteLength
+      ? (audio.buffer as ArrayBuffer)
+      : new Uint8Array(audio).buffer as ArrayBuffer
+
   const attempts: string[] = []
   let lastError = 'Workers AI transcription failed'
   for (const model of WORKERS_AI_STT_MODELS) {
@@ -113,7 +119,7 @@ export async function workersAiTranscribe(
       const isDeepgram = model.includes('deepgram')
       const input: Record<string, unknown> = isDeepgram
         ? { audio: Array.from(audio) }
-        : { audio }
+        : { audio: exact }
       const raw = (await Promise.race([
         run(model, input),
         new Promise((_, reject) =>
