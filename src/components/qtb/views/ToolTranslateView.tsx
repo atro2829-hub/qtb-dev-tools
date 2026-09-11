@@ -2,7 +2,13 @@
 
 import { useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { api, base64ToBlob, downloadBlob, formatBytes } from "@/lib/client-api";
+import {
+  archiveResult,
+  base64ToBlob,
+  downloadBlob,
+  formatBytes,
+  uploadWithProgress,
+} from "@/lib/client-api";
 import { useQtbToast } from "@/components/qtb/use-qtb-toast";
 import { useAppStore } from "@/store/app-store";
 import QTBIcon from "@/components/qtb/QTBIcon";
@@ -19,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import ToolRecentRuns from "@/components/qtb/ToolRecentRuns";
+import RunMeter, { CloudLinkChip, type MeterPhase } from "@/components/qtb/RunMeter";
 import { cn } from "@/lib/utils";
 
 const MAX_SIZE = 12 * 1024 * 1024;
@@ -60,6 +67,13 @@ export default function ToolTranslateView() {
   const [result, setResult] = useState<TranslateResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
+  // real 1→100 run meter
+  const [meterPhase, setMeterPhase] = useState<MeterPhase>("idle");
+  const [uploadPct, setUploadPct] = useState(0);
+  const [uploadBytes, setUploadBytes] = useState(0);
+  const [runKey, setRunKey] = useState<string | null>(null);
+  const [cloudUrl, setCloudUrl] = useState<string | null>(null);
+
   const acceptFile = (f: File | undefined | null) => {
     if (!f) return;
     const ext = (f.name.split(".").pop() ?? "").toLowerCase();
@@ -90,10 +104,16 @@ export default function ToolTranslateView() {
     runningRef.current = true;
     setLoading(true);
     try {
+      const key = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`).slice(0, 80);
+      setRunKey(key);
+      setUploadPct(0);
+      setCloudUrl(null);
+      setMeterPhase("upload");
       const fd = new FormData();
       fd.set("file", file);
       fd.set("sourceLang", sourceLang);
       fd.set("targetLang", targetLang);
+      fd.set("run", key);
       // PDF text is extracted IN THE BROWSER (pdf.js) — the Cloudflare
       // Workers runtime cannot run pdfjs server-side.
       const ext = (file.name.split(".").pop() ?? "").toLowerCase();
@@ -110,18 +130,33 @@ export default function ToolTranslateView() {
         }
         fd.set("extractedText", text);
       }
-      const res = await api<TranslateResult>("/api/tools/translate", {
-        method: "POST",
-        body: fd,
-      });
+      const res = await uploadWithProgress<TranslateResult>(
+        "/api/tools/translate",
+        fd,
+        (pct, loaded) => {
+          setUploadPct(pct);
+          setUploadBytes(loaded);
+          if (pct >= 100) setMeterPhase("process"); // body fully sent → server is working
+        }
+      );
+      const docMime =
+        res.mimeType || "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
       setResult({
         fileName: res.fileName || "translated.docx",
-        mimeType: res.mimeType || "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        mimeType: docMime,
         dataBase64: res.dataBase64,
         preview: res.preview ?? "",
       });
+      setMeterPhase("idle");
       toast.success(t("tr.done"), t("tr.doneSub"));
+      // Fire-and-forget cloud permalink for the translated document.
+      archiveResult(base64ToBlob(res.dataBase64, docMime), res.fileName || "translated.docx", "translate", key)
+        .then((url) => {
+          if (url) setCloudUrl(url);
+        })
+        .catch(() => {});
     } catch (err) {
+      setMeterPhase("idle");
       toast.error(err, t("tr.failed"));
     } finally {
       runningRef.current = false;
@@ -132,6 +167,10 @@ export default function ToolTranslateView() {
   const reset = () => {
     setFile(null);
     setResult(null);
+    setMeterPhase("idle");
+    setUploadPct(0);
+    setRunKey(null);
+    setCloudUrl(null);
   };
 
   return (
@@ -264,7 +303,14 @@ export default function ToolTranslateView() {
           </h2>
           {loading ? (
             <div className="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-neutral-100 bg-neutral-50/60 p-8">
-              <div className="qtb-spinner" />
+              <RunMeter
+                phase={meterPhase}
+                uploadPct={uploadPct}
+                uploadedBytes={uploadBytes}
+                totalBytes={file?.size ?? 0}
+                runKey={runKey}
+                className="w-full max-w-sm"
+              />
               <p className="text-sm font-semibold text-neutral-600">
                 {readingPdf !== null
                   ? t("tool.readingPdf", { pct: readingPdf })
@@ -285,6 +331,10 @@ export default function ToolTranslateView() {
               <div className="qtb-scroll max-h-56 overflow-y-auto whitespace-pre-wrap rounded-2xl border border-neutral-200 bg-neutral-50/60 p-4 text-sm leading-relaxed text-neutral-700">
                 {result.preview || t("tr.noPreview")}
               </div>
+              <CloudLinkChip
+                url={cloudUrl}
+                onCopied={() => toast.success(t("au.linkCopied"), t("au.linkCopiedSub"))}
+              />
               <QTBButton
                 wrapperClassName="w-full sm:w-auto [&>button]:w-full"
                 onClick={() =>

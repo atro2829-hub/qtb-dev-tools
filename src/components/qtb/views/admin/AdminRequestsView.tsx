@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { format, formatDistanceToNow } from "date-fns";
+import { ar as arLocale } from "date-fns/locale";
 import { api, apiJson, downloadDataUrl } from "@/lib/client-api";
 import { useQtbToast } from "@/components/qtb/use-qtb-toast";
+import { useAppStore } from "@/store/app-store";
 import QTBIcon from "@/components/qtb/QTBIcon";
 import QTBButton from "@/components/qtb/QTBButton";
 import { GradientChip, EmptyState } from "@/components/qtb/ui-bits";
@@ -46,6 +48,20 @@ interface RequestRow {
 
 type Filter = "pending" | "approved" | "denied" | "all";
 
+const STATUS_LABEL_KEY: Record<string, string> = {
+  pending: "ad.req.filterPending",
+  approved: "ad.req.filterApproved",
+  denied: "ad.req.filterDenied",
+  all: "ad.req.filterAll",
+};
+
+const EMPTY_TITLE_KEY: Record<Filter, string> = {
+  pending: "ad.req.emptyPending",
+  approved: "ad.req.emptyApproved",
+  denied: "ad.req.emptyDenied",
+  all: "ad.req.emptyAll",
+};
+
 function normalizeRequest(raw: unknown): RequestRow | null {
   if (typeof raw !== "object" || raw === null) return null;
   const r = raw as Record<string, unknown>;
@@ -81,6 +97,7 @@ function normalizeRequest(raw: unknown): RequestRow | null {
 }
 
 function StatusBadge({ status }: { status: string }) {
+  const t = useAppStore((s) => s.t);
   const cls =
     status === "approved"
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -89,7 +106,7 @@ function StatusBadge({ status }: { status: string }) {
         : "border-amber-200 bg-amber-50 text-amber-700";
   return (
     <Badge variant="outline" className={cn("font-bold capitalize", cls)}>
-      {status}
+      {STATUS_LABEL_KEY[status] ? t(STATUS_LABEL_KEY[status]) : status}
     </Badge>
   );
 }
@@ -100,6 +117,8 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function AdminRequestsView() {
   const toast = useQtbToast();
+  const t = useAppStore((s) => s.t);
+  const lang = useAppStore((s) => s.lang);
   const [requests, setRequests] = useState<RequestRow[] | null>(null);
   const [filter, setFilter] = useState<Filter>("pending");
   const [proofTarget, setProofTarget] = useState<RequestRow | null>(null);
@@ -117,7 +136,7 @@ export default function AdminRequestsView() {
       })
       .catch((err) => {
         setRequests([]);
-        toast.error(err, "Couldn't load requests");
+        toast.error(err, t("ad.req.loadFailed"));
       });
 
   useEffect(() => {
@@ -155,17 +174,15 @@ export default function AdminRequestsView() {
       if (reviewNote.trim()) body.reviewNote = reviewNote.trim();
       await apiJson("/api/admin/subscription-requests", "PUT", body);
       toast.success(
-        reviewTarget.action === "approve" ? "Request approved" : "Request denied",
-        `${reviewTarget.row.user?.email ?? "Member"} ${
-          reviewTarget.action === "approve"
-            ? "is now an active member."
-            : "keeps their current plan status."
-        }`
+        reviewTarget.action === "approve" ? t("ad.req.approvedTitle") : t("ad.req.deniedTitle"),
+        reviewTarget.action === "approve"
+          ? t("ad.req.approvedSub", { email: reviewTarget.row.user?.email ?? t("ad.req.memberFallback") })
+          : t("ad.req.deniedSub", { email: reviewTarget.row.user?.email ?? t("ad.req.memberFallback") })
       );
       setReviewTarget(null);
       await load();
     } catch (err) {
-      toast.error(err, "Review failed");
+      toast.error(err, t("ad.req.reviewFailed"));
     } finally {
       setReviewing(false);
     }
@@ -178,9 +195,9 @@ export default function AdminRequestsView() {
         <div className="flex items-center gap-3">
           <GradientChip icon="list-check" tone="violet" />
           <div>
-            <h2 className="text-base font-bold text-neutral-900">Subscription Requests</h2>
+            <h2 className="text-base font-bold text-neutral-900">{t("ad.req.title")}</h2>
             <p className="text-xs text-neutral-400">
-              Payment proofs submitted by members. Approving activates their plan instantly.
+              {t("ad.req.desc")}
             </p>
           </div>
         </div>
@@ -188,7 +205,7 @@ export default function AdminRequestsView() {
           <TabsList className="h-auto flex-wrap">
             {(["pending", "approved", "denied", "all"] as Filter[]).map((f) => (
               <TabsTrigger key={f} value={f} className="gap-1.5 capitalize">
-                {f}
+                {t(STATUS_LABEL_KEY[f])}
                 <span
                   className={cn(
                     "rounded-full px-1.5 text-[10px] font-bold",
@@ -221,8 +238,8 @@ export default function AdminRequestsView() {
         <div className="rounded-2xl border border-neutral-200 bg-white">
           <EmptyState
             icon="file-check"
-            title={filter === "pending" ? "No pending requests" : `No ${filter === "all" ? "" : filter} requests`}
-            description="When members submit payment proofs they will appear here for review."
+            title={t(EMPTY_TITLE_KEY[filter])}
+            description={t("ad.req.emptyDesc")}
           />
         </div>
       )}
@@ -250,7 +267,7 @@ export default function AdminRequestsView() {
                     </span>
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-neutral-900">
-                        {row.user?.name || "Unnamed member"}
+                        {row.user?.name || t("ad.req.unnamed")}
                       </p>
                       <p className="truncate text-xs text-neutral-400">{row.user?.email}</p>
                     </div>
@@ -269,13 +286,13 @@ export default function AdminRequestsView() {
                 {/* Details grid */}
                 <div className="mt-4 grid gap-3 rounded-xl bg-neutral-50/80 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Bank</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">{t("ad.req.bank")}</p>
                     <p className="mt-0.5 truncate font-semibold text-neutral-800">
                       {row.bankName || "—"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Amount</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">{t("ad.req.amount")}</p>
                     <p className="mt-0.5 font-semibold text-neutral-800">
                       {row.amount !== null
                         ? `${row.currency} ${row.amount.toLocaleString()}`
@@ -283,13 +300,13 @@ export default function AdminRequestsView() {
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Payment ref.</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">{t("ad.req.payRef")}</p>
                     <p className="mt-0.5 truncate font-mono text-xs font-bold text-neutral-800">
                       {row.paymentReference || "—"}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">Proof</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">{t("ad.req.proof")}</p>
                     <div className="mt-0.5">
                       {hasProof ? (
                         isImage ? (
@@ -297,11 +314,11 @@ export default function AdminRequestsView() {
                             type="button"
                             onClick={() => setProofTarget(row)}
                             className="group flex items-center gap-2 rounded-lg border border-neutral-200 bg-white p-1 pr-2.5 transition-colors hover:border-fuchsia-300"
-                            aria-label="View payment proof"
+                            aria-label={t("ad.req.viewProofAria")}
                           >
                             <img
                               src={row.proofData}
-                              alt="Payment proof thumbnail"
+                              alt={t("ad.req.proofThumbAlt")}
                               className="qtb-checker h-9 w-9 rounded object-cover"
                             />
                             <span className="max-w-28 truncate text-[11px] font-semibold text-neutral-600 group-hover:text-fuchsia-700">
@@ -325,7 +342,7 @@ export default function AdminRequestsView() {
                           </QTBButton>
                         )
                       ) : (
-                        <span className="text-xs text-neutral-400">Not provided</span>
+                        <span className="text-xs text-neutral-400">{t("ad.req.noProof")}</span>
                       )}
                     </div>
                   </div>
@@ -333,18 +350,21 @@ export default function AdminRequestsView() {
 
                 {row.note && (
                   <p className="mt-3 rounded-xl border border-neutral-100 bg-white p-3 text-xs leading-relaxed text-neutral-600">
-                    <span className="font-bold text-neutral-500">Member note: </span>
+                    <span className="font-bold text-neutral-500">{t("ad.req.memberNote")} </span>
                     {row.note}
                   </p>
                 )}
 
                 {row.reviewNote && row.status !== "pending" && (
                   <p className="mt-2 rounded-xl border border-neutral-100 bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-500">
-                    <span className="font-bold">Review note: </span>
+                    <span className="font-bold">{t("ad.req.reviewNoteLabel")} </span>
                     {row.reviewNote}
                     {row.reviewedAt && (
                       <span className="ml-1 text-neutral-400">
-                        · {formatDistanceToNow(new Date(row.reviewedAt), { addSuffix: true })}
+                        · {formatDistanceToNow(new Date(row.reviewedAt), {
+                          addSuffix: true,
+                          locale: lang === "ar" ? arLocale : undefined,
+                        })}
                       </span>
                     )}
                   </p>
@@ -359,7 +379,7 @@ export default function AdminRequestsView() {
                       className="border-emerald-300 text-emerald-700 hover:border-emerald-400 hover:bg-emerald-50"
                       onClick={() => openReview(row, "approve")}
                     >
-                      <QTBIcon name="check" size={14} /> Approve
+                      <QTBIcon name="check" size={14} /> {t("ad.req.approve")}
                     </QTBButton>
                     <QTBButton
                       size="sm"
@@ -367,12 +387,12 @@ export default function AdminRequestsView() {
                       className="border-rose-300 text-rose-700 hover:border-rose-400 hover:bg-rose-50"
                       onClick={() => openReview(row, "deny")}
                     >
-                      <QTBIcon name="x" size={14} /> Deny
+                      <QTBIcon name="x" size={14} /> {t("ad.req.deny")}
                     </QTBButton>
                   </div>
                 ) : (
                   <p className="mt-3 border-t border-neutral-100 pt-3 text-right text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
-                    Reviewed
+                    {t("ad.req.reviewed")}
                   </p>
                 )}
               </motion.div>
@@ -385,16 +405,16 @@ export default function AdminRequestsView() {
       <Dialog open={proofTarget !== null} onOpenChange={(open) => !open && setProofTarget(null)}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Payment Proof</DialogTitle>
+            <DialogTitle>{t("ad.req.proofTitle")}</DialogTitle>
             <DialogDescription>
-              {proofTarget?.user?.email} · {proofTarget?.proofFileName || "attachment"}
+              {proofTarget?.user?.email} · {proofTarget?.proofFileName || t("ad.req.attachment")}
             </DialogDescription>
           </DialogHeader>
           {proofTarget?.proofData && (
             <div className="qtb-scroll max-h-[60vh] overflow-auto rounded-xl border border-neutral-200 qtb-checker p-2">
               <img
                 src={proofTarget.proofData}
-                alt={`Payment proof from ${proofTarget.user?.email ?? "member"}`}
+                alt={t("ad.req.proofFromAlt", { email: proofTarget.user?.email ?? "" })}
                 className="mx-auto max-h-[55vh] w-auto rounded-lg object-contain"
               />
             </div>
@@ -410,17 +430,18 @@ export default function AdminRequestsView() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {reviewTarget?.action === "approve" ? "Approve request" : "Deny request"}
+              {reviewTarget?.action === "approve" ? t("ad.req.approveTitle") : t("ad.req.denyTitle")}
             </DialogTitle>
             <DialogDescription>
-              {reviewTarget?.row.user?.email} · {reviewTarget?.row.plan} plan
+              {reviewTarget?.row.user?.email} ·{" "}
+              {reviewTarget ? t("ad.req.planOf", { plan: reviewTarget.row.plan }) : ""}
               {reviewTarget?.action === "approve"
-                ? " — approving marks this member as Active immediately."
-                : " — denying leaves the member's current plan unchanged."}
+                ? t("ad.req.approveDesc")
+                : t("ad.req.denyDesc")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="review-note">Review note (optional)</Label>
+            <Label htmlFor="review-note">{t("ad.req.reviewNoteOptional")}</Label>
             <Textarea
               id="review-note"
               value={reviewNote}
@@ -429,14 +450,14 @@ export default function AdminRequestsView() {
               maxLength={1000}
               placeholder={
                 reviewTarget?.action === "approve"
-                  ? "e.g. Payment verified against bank statement."
-                  : "e.g. Reference number not found — please double-check."
+                  ? t("ad.req.phApprove")
+                  : t("ad.req.phDeny")
               }
             />
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <QTBButton variant="outline" onClick={() => setReviewTarget(null)}>
-              Cancel
+              {t("common.cancel")}
             </QTBButton>
             <QTBButton
               loading={reviewing}
@@ -448,7 +469,7 @@ export default function AdminRequestsView() {
               onClick={() => void submitReview()}
             >
               <QTBIcon name={reviewTarget?.action === "approve" ? "check" : "x"} size={15} />
-              {reviewTarget?.action === "approve" ? "Approve" : "Deny"}
+              {reviewTarget?.action === "approve" ? t("ad.req.approve") : t("ad.req.deny")}
             </QTBButton>
           </DialogFooter>
         </DialogContent>

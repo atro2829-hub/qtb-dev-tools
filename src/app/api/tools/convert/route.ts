@@ -5,6 +5,7 @@ import { badRequest } from '@/lib/server/api-utils'
 import { detectFormat, extractText, stripMarkdownArtifacts, type SourceFormat } from '@/lib/server/text-extraction'
 import { textToPdfBuffer } from '@/lib/server/pdf-generation'
 import { textToDocxBuffer } from '@/lib/server/docx-generation'
+import { startRun, type RunHandle } from '@/lib/server/progress'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -77,12 +78,14 @@ export async function POST(request: Request) {
   let jobFileName = ''
   let sourceFormat = ''
   let targetFormat = ''
+  let rh: RunHandle | null = null
 
   try {
     const form = await request.formData()
     const file = form.get('file')
     const rawTarget = form.get('targetFormat')
     const target = typeof rawTarget === 'string' ? rawTarget.trim().toLowerCase() : ''
+    const runKey = typeof form.get('run') === 'string' ? (form.get('run') as string).trim().slice(0, 80) : ''
     const extractedTextRaw = form.get('extractedText')
     const extractedText =
       typeof extractedTextRaw === 'string'
@@ -130,23 +133,36 @@ export async function POST(request: Request) {
         return badRequest(`Conversion from ${source} to ${target} is not supported`)
       }
       targetFormat = target
+      rh = await startRun({
+        userId: session.id,
+        runKey,
+        toolType: 'convert',
+        fileName,
+        sourceFormat: source,
+        targetFormat: target,
+      })
+      rh?.step(30, 'converting')
       result = await convertDocument(buffer, source, target as 'docx' | 'pdf' | 'txt', extractedText)
     } else {
       return badRequest('Unsupported source file format')
     }
 
     const base = fileName.replace(/\.[^.]+$/, '') || 'document'
-    await db.toolJob.create({
-      data: {
-        userId: session.id,
-        toolType: 'convert',
-        fileName,
-        sourceFormat,
-        targetFormat,
-        status: 'completed',
-        detail: `Converted ${sourceFormat} → ${targetFormat}`,
-      },
-    })
+    if (rh) {
+      await rh.finish(`Converted ${sourceFormat} → ${targetFormat}`)
+    } else {
+      await db.toolJob.create({
+        data: {
+          userId: session.id,
+          toolType: 'convert',
+          fileName,
+          sourceFormat,
+          targetFormat,
+          status: 'completed',
+          detail: `Converted ${sourceFormat} → ${targetFormat}`,
+        },
+      })
+    }
 
     return Response.json({
       fileName: `${base}-converted.${target}`,
@@ -155,7 +171,9 @@ export async function POST(request: Request) {
     })
   } catch (err) {
     console.error('[tools/convert]', err)
-    if (session) {
+    if (rh) {
+      await rh.fail(err instanceof Error ? err.message.slice(0, 500) : 'Unknown error')
+    } else if (session) {
       await db.toolJob
         .create({
           data: {

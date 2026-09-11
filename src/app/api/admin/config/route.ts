@@ -21,6 +21,8 @@ const configUpdateSchema = z.object({
   admobBannerId: z.string().max(MAX_STR).optional(),
   adsenseClientId: z.string().max(MAX_STR).optional(),
   adsenseSlotId: z.string().max(MAX_STR).optional(),
+  supabaseUrl: z.string().max(500).optional(),
+  supabaseServiceKey: z.string().max(500).optional(),
   announcement: z.string().max(MAX_STR).optional(),
   freeTrialEnabled: z.boolean().optional(),
   freeTrialDays: z.number().int().min(1).max(3650).optional(),
@@ -72,6 +74,8 @@ export async function PUT(request: Request) {
       'admobBannerId',
       'adsenseClientId',
       'adsenseSlotId',
+      'supabaseUrl',
+      'supabaseServiceKey',
       'announcement',
     ] as const
 

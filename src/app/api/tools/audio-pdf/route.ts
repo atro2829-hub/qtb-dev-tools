@@ -4,6 +4,7 @@ import { getSessionUser, unauthorized } from '@/lib/auth'
 import { enforceQuota } from '@/lib/server/quota'
 import { db } from '@/lib/db'
 import { badRequest, getFormString } from '@/lib/server/api-utils'
+import { startRun, type RunHandle, type RunStage } from '@/lib/server/progress'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -285,6 +286,7 @@ export async function POST(request: Request) {
 
   let jobFileName = ''
   let jobDetail = ''
+  let rh: RunHandle | null = null
 
   try {
     const form = await request.formData()
@@ -293,6 +295,7 @@ export async function POST(request: Request) {
     const style = ALLOWED_STYLES.has(styleRaw) ? styleRaw : 'smart'
     const targetLang = getFormString(form, 'targetLang') || 'auto'
     const durationLabel = getFormString(form, 'duration').slice(0, 20)
+    const runKey = getFormString(form, 'run').slice(0, 80)
 
     if (!(file instanceof File) || file.size === 0) {
       return badRequest('An audio file is required')
@@ -310,6 +313,7 @@ export async function POST(request: Request) {
       )
     }
     jobDetail = style
+    const ext = (fileName.match(/\.([a-z0-9]{2,5})$/i)?.[1] ?? 'webm').toLowerCase()
 
     const buffer = Buffer.from(await file.arrayBuffer())
     const lower = fileName.toLowerCase()
@@ -327,6 +331,17 @@ export async function POST(request: Request) {
                 ? 'audio/flac'
                 : 'audio/mpeg'
     const audioBase64 = buffer.toString('base64')
+
+    /* ---- Live run progress (real server-side milestones) ---- */
+    rh = await startRun({
+      userId: session.id,
+      runKey,
+      toolType: 'audio-pdf',
+      fileName,
+      sourceFormat: ext,
+      targetFormat: 'pdf',
+    })
+    rh?.step(15, 'transcribing')
 
     /* ---- 1) Transcribe ---- */
     const cfg = await db.siteConfig.findUnique({ where: { id: 'main' } })
@@ -379,6 +394,8 @@ export async function POST(request: Request) {
     }
 
     if (!transcript) {
+      await rh?.fail('Silent or unintelligible audio — no speech detected')
+      rh = null
       return Response.json(
         {
           error:
@@ -389,6 +406,7 @@ export async function POST(request: Request) {
     }
 
     /* ---- 2) Smart organization ---- */
+    rh?.step(58, 'organizing')
     const { text: orgRaw, engine: orgEngine } = await chatText(
       ORGANIZE_SYSTEM,
       organizeInstruction(transcript, style, targetLang),
@@ -400,18 +418,22 @@ export async function POST(request: Request) {
     jobDetail = `${style} [org:${orgEngine} · asr:${transcribeEngine}]`
 
     /* ---- 3) Record + respond ---- */
-    const ext = (fileName.match(/\.([a-z0-9]{2,5})$/i)?.[1] ?? 'webm').toLowerCase()
-    await db.toolJob.create({
-      data: {
-        userId: session.id,
-        toolType: 'audio-pdf',
-        fileName,
-        sourceFormat: ext,
-        targetFormat: 'pdf',
-        status: 'completed',
-        detail: jobDetail,
-      },
-    })
+    rh?.step(90, 'saving')
+    if (rh) {
+      await rh.finish(jobDetail)
+    } else {
+      await db.toolJob.create({
+        data: {
+          userId: session.id,
+          toolType: 'audio-pdf',
+          fileName,
+          sourceFormat: ext,
+          targetFormat: 'pdf',
+          status: 'completed',
+          detail: jobDetail,
+        },
+      })
+    }
 
     return Response.json({
       doc,
@@ -421,7 +443,9 @@ export async function POST(request: Request) {
     })
   } catch (err) {
     console.error('[tools/audio-pdf]', err)
-    if (session) {
+    if (rh) {
+      await rh.fail(err instanceof Error ? err.message.slice(0, 500) : 'Unknown error')
+    } else if (session) {
       await db.toolJob
         .create({
           data: {

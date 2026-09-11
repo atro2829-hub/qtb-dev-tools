@@ -2,7 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { api, formatBytes, downloadDataUrl } from "@/lib/client-api";
+import {
+  archiveResult,
+  base64ToBlob,
+  formatBytes,
+  downloadDataUrl,
+  uploadWithProgress,
+} from "@/lib/client-api";
 import { useAppStore } from "@/store/app-store";
 import { useQtbToast } from "@/components/qtb/use-qtb-toast";
 import QTBIcon from "@/components/qtb/QTBIcon";
@@ -11,6 +17,7 @@ import { GradientChip } from "@/components/qtb/ui-bits";
 import ToolIcon from "@/components/qtb/ToolIcon";
 import ToolHelpSheet from "@/components/qtb/ToolHelpSheet";
 import ToolRecentRuns from "@/components/qtb/ToolRecentRuns";
+import RunMeter, { CloudLinkChip, type MeterPhase } from "@/components/qtb/RunMeter";
 import { cn } from "@/lib/utils";
 
 const MAX_SIZE = 12 * 1024 * 1024; // 12MB
@@ -27,6 +34,13 @@ export default function ToolBgRemoveView() {
   const [result, setResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+
+  // real 1→100 run meter
+  const [meterPhase, setMeterPhase] = useState<MeterPhase>("idle");
+  const [uploadPct, setUploadPct] = useState(0);
+  const [uploadBytes, setUploadBytes] = useState(0);
+  const [runKey, setRunKey] = useState<string | null>(null);
+  const [cloudUrl, setCloudUrl] = useState<string | null>(null);
 
   useEffect(() => {
     return () => {
@@ -68,16 +82,41 @@ export default function ToolBgRemoveView() {
     runningRef.current = true;
     setLoading(true);
     try {
+      const key = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`).slice(0, 80);
+      setRunKey(key);
+      setUploadPct(0);
+      setCloudUrl(null);
+      setMeterPhase("upload");
       const fd = new FormData();
       fd.set("image", file);
-      const res = await api<{ image: string }>("/api/tools/bg-remove", {
-        method: "POST",
-        body: fd,
-      });
+      fd.set("run", key);
+      const res = await uploadWithProgress<{ image: string }>(
+        "/api/tools/bg-remove",
+        fd,
+        (pct, loaded) => {
+          setUploadPct(pct);
+          setUploadBytes(loaded);
+          if (pct >= 100) setMeterPhase("process"); // body fully sent → server is working
+        }
+      );
       if (!res.image) throw new Error(t("bg.aiFail"));
       setResult(res.image);
+      setMeterPhase("idle");
       toast.success(t("bg.resultTitle"), t("bg.resultSub"));
+      // Fire-and-forget cloud permalink for the cut-out PNG.
+      const base =
+        (file.name.replace(/\.[^.]+$/, "") || "image")
+          .replace(/[\\/:*?"<>|]+/g, "")
+          .replace(/\s+/g, "-")
+          .slice(0, 70)
+          .replace(/^[-.]+|[-.]+$/g, "") || "image";
+      archiveResult(base64ToBlob(res.image, "image/png"), `${base}-nobg.png`, "bg-remove", key)
+        .then((url) => {
+          if (url) setCloudUrl(url);
+        })
+        .catch(() => {});
     } catch (err) {
+      setMeterPhase("idle");
       toast.error(err, t("bg.failed"));
     } finally {
       runningRef.current = false;
@@ -91,6 +130,10 @@ export default function ToolBgRemoveView() {
     setFile(null);
     setPreview(null);
     setResult(null);
+    setMeterPhase("idle");
+    setUploadPct(0);
+    setRunKey(null);
+    setCloudUrl(null);
   };
 
   return (
@@ -211,6 +254,10 @@ export default function ToolBgRemoveView() {
                   className="max-h-80 w-full object-contain"
                 />
               </div>
+              <CloudLinkChip
+                url={cloudUrl}
+                onCopied={() => toast.success(t("au.linkCopied"), t("au.linkCopiedSub"))}
+              />
               <div className="flex flex-col gap-2.5 sm:flex-row">
                 <QTBButton
                   className="flex-1"
@@ -226,7 +273,14 @@ export default function ToolBgRemoveView() {
             </motion.div>
           ) : loading ? (
             <div className="flex min-h-64 flex-col items-center justify-center gap-4 rounded-2xl border border-neutral-100 bg-neutral-50/60">
-              <div className="qtb-spinner" />
+              <RunMeter
+                phase={meterPhase}
+                uploadPct={uploadPct}
+                uploadedBytes={uploadBytes}
+                totalBytes={file?.size ?? 0}
+                runKey={runKey}
+                className="w-full max-w-sm"
+              />
               <p className="text-sm font-semibold text-neutral-600">
                 {t("bg.removing")}
               </p>

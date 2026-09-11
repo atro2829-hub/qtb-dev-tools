@@ -135,3 +135,104 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     }
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Upload with real progress (1→100)                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * POST a multipart form via XHR so the caller can render REAL upload
+ * progress (bytes on the wire) instead of an indeterminate spinner.
+ * Resolves with the parsed JSON response; throws ApiError on failure.
+ */
+export function uploadWithProgress<T = Record<string, unknown>>(
+  path: string,
+  form: FormData,
+  onProgress?: (percent: number, uploadedBytes: number, totalBytes: number) => void,
+  signal?: AbortSignal
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", path, true);
+    xhr.withCredentials = true;
+    xhr.responseType = "text";
+
+    xhr.upload.onprogress = (e) => {
+      if (!onProgress || !e.lengthComputable) return;
+      const pct = e.total > 0 ? Math.min(100, Math.round((e.loaded / e.total) * 100)) : 100;
+      onProgress(pct, e.loaded, e.total);
+    };
+
+    const abort = () => xhr.abort();
+    signal?.addEventListener("abort", abort, { once: true });
+
+    xhr.onload = () => {
+      signal?.removeEventListener("abort", abort);
+      let data: unknown = null;
+      try {
+        data = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+      } catch {
+        data = { raw: xhr.responseText };
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data as T);
+      } else {
+        const message =
+          isRecord(data) && typeof data.error === "string" && data.error.length > 0
+            ? data.error
+            : `Request failed (${xhr.status})`;
+        reject(new ApiError(message, xhr.status));
+      }
+    };
+    xhr.onerror = () => {
+      signal?.removeEventListener("abort", abort);
+      reject(new ApiError("Network error — please check your connection and try again.", 0));
+    };
+    xhr.onabort = () => {
+      signal?.removeEventListener("abort", abort);
+      reject(new ApiError("Upload canceled.", 499));
+    };
+
+    xhr.send(form);
+  });
+}
+
+export interface RunProgress {
+  status: string;
+  progress: number;
+  stage: string;
+  resultUrl?: string;
+}
+
+/** Poll the server-side milestone progress of a running tool job. */
+export async function fetchRunProgress(runKey: string): Promise<RunProgress> {
+  return api<RunProgress>(`/api/tools/progress?run=${encodeURIComponent(runKey)}`);
+}
+
+/**
+ * Archives a finished result blob to the cloud bucket (Supabase Storage,
+ * configured by the admin) and returns its public permalink. Returns null
+ * when the cloud archive is not available — callers must treat it as
+ * optional sugar, never as a failure of the tool run itself.
+ */
+export async function archiveResult(
+  blob: Blob,
+  fileName: string,
+  tool: string,
+  runKey?: string
+): Promise<string | null> {
+  try {
+    const fd = new FormData();
+    fd.append("file", blob, fileName);
+    fd.append("tool", tool);
+    fd.append("name", fileName);
+    if (runKey) fd.append("run", runKey);
+    const res = await api<{ url?: string }>("/api/tools/archive", {
+      method: "POST",
+      body: fd,
+    });
+    return res.url ?? null;
+  } catch {
+    return null;
+  }
+}

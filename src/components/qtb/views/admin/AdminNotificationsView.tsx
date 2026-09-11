@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
+import { ar as arLocale } from "date-fns/locale";
 import { apiJson } from "@/lib/client-api";
 import { useQtbToast } from "@/components/qtb/use-qtb-toast";
 import { useAppStore, type NotificationType } from "@/store/app-store";
@@ -45,19 +46,33 @@ interface SentItem {
   createdAt: string;
 }
 
-const TYPE_OPTIONS: { value: NotificationType; label: string; icon: QTBIconName }[] = [
-  { value: "info", label: "Info", icon: "info" },
-  { value: "offer", label: "Offer", icon: "gift" },
-  { value: "warning", label: "Warning", icon: "alert" },
-  { value: "success", label: "Success", icon: "check-circle" },
+const TYPE_OPTIONS: { value: NotificationType; labelKey: string; icon: QTBIconName }[] = [
+  { value: "info", labelKey: "ad.notif.typeInfo", icon: "info" },
+  { value: "offer", labelKey: "ad.notif.typeOffer", icon: "gift" },
+  { value: "warning", labelKey: "ad.notif.typeWarning", icon: "alert" },
+  { value: "success", labelKey: "ad.notif.typeSuccess", icon: "check-circle" },
 ];
 
-const AUDIENCE_OPTIONS: { value: string; label: string }[] = [
-  { value: "all", label: "Everyone" },
-  { value: "trial", label: "Trial users" },
-  { value: "expired", label: "Expired users" },
-  { value: "active", label: "Active members" },
+const AUDIENCE_OPTIONS: { value: string; labelKey: string }[] = [
+  { value: "all", labelKey: "ad.notif.audAll" },
+  { value: "trial", labelKey: "ad.notif.audTrial" },
+  { value: "expired", labelKey: "ad.notif.audExpired" },
+  { value: "active", labelKey: "ad.notif.audActive" },
 ];
+
+const TYPE_LABEL_KEY: Record<string, string> = {
+  info: "ad.notif.typeInfo",
+  offer: "ad.notif.typeOffer",
+  warning: "ad.notif.typeWarning",
+  success: "ad.notif.typeSuccess",
+};
+
+const AUDIENCE_LABEL_KEY: Record<string, string> = {
+  all: "ad.notif.audAll",
+  trial: "ad.notif.audTrial",
+  expired: "ad.notif.audExpired",
+  active: "ad.notif.audActive",
+};
 
 const TYPE_CHIP: Record<NotificationType, string> = {
   info: "border-neutral-200 bg-neutral-100 text-neutral-600",
@@ -72,6 +87,8 @@ const TYPE_CHIP: Record<NotificationType, string> = {
 
 export default function AdminNotificationsView() {
   const toast = useQtbToast();
+  const t = useAppStore((s) => s.t);
+  const lang = useAppStore((s) => s.lang);
   const refreshNotifications = useAppStore((s) => s.refreshNotifications);
 
   const [title, setTitle] = useState("");
@@ -84,7 +101,7 @@ export default function AdminNotificationsView() {
 
   const send = async () => {
     if (title.trim().length === 0 || message.trim().length === 0) {
-      toast.info("Missing content", "Give the broadcast a title and a message.");
+      toast.info(t("ad.notif.missingTitle"), t("ad.notif.missingSub"));
       return;
     }
     setSending(true);
@@ -112,13 +129,13 @@ export default function AdminNotificationsView() {
       }
       // Refresh the in-app inbox so other admin surfaces stay in sync.
       void refreshNotifications();
-      toast.success("Broadcast sent", "It's now visible to the selected audience.");
+      toast.success(t("ad.notif.sentTitle"), t("ad.notif.sentSub"));
       setTitle("");
       setMessage("");
       setType("info");
       setAudience("all");
     } catch (err) {
-      toast.error(err, "Broadcast failed");
+      toast.error(err, t("ad.notif.sendFailed"));
     } finally {
       setSending(false);
     }
@@ -129,9 +146,9 @@ export default function AdminNotificationsView() {
       await apiJson(`/api/admin/notifications?id=${encodeURIComponent(item.id)}`, "DELETE");
       setSentList((list) => list.filter((n) => n.id !== item.id));
       void refreshNotifications();
-      toast.success("Notification deleted", "It no longer appears in member inboxes.");
+      toast.success(t("ad.notif.deletedTitle"), t("ad.notif.deletedSub"));
     } catch (err) {
-      toast.error(err, "Delete failed");
+      toast.error(err, t("ad.notif.deleteFailed"));
     } finally {
       setDeleteTarget(null);
     }
@@ -144,49 +161,49 @@ export default function AdminNotificationsView() {
         <div className="flex items-center gap-3 border-b border-neutral-100 p-5">
           <GradientChip icon="megaphone" tone="rose" />
           <div>
-            <h2 className="text-base font-bold text-neutral-900">New Broadcast</h2>
+            <h2 className="text-base font-bold text-neutral-900">{t("ad.notif.newTitle")}</h2>
             <p className="text-xs text-neutral-400">
-              Delivered instantly to the in-app notification inbox.
+              {t("ad.notif.newDesc")}
             </p>
           </div>
         </div>
         <div className="space-y-4 p-5">
           <div className="space-y-2">
-            <Label htmlFor="bc-title">Title</Label>
+            <Label htmlFor="bc-title">{t("ad.notif.titleLabel")}</Label>
             <Input
               id="bc-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={120}
-              placeholder="e.g. New tool just dropped!"
+              placeholder={t("ad.notif.titlePh")}
             />
             <p className="text-right text-[11px] text-neutral-300">{title.length}/120</p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="bc-message">Message</Label>
+            <Label htmlFor="bc-message">{t("ad.notif.messageLabel")}</Label>
             <Textarea
               id="bc-message"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               maxLength={2000}
               rows={5}
-              placeholder="Write the announcement your members will read in their inbox…"
+              placeholder={t("ad.notif.messagePh")}
             />
             <p className="text-right text-[11px] text-neutral-300">{message.length}/2000</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="bc-type">Type</Label>
+              <Label htmlFor="bc-type">{t("ad.notif.typeLabel")}</Label>
               <Select value={type} onValueChange={(v) => setType(v as NotificationType)}>
                 <SelectTrigger id="bc-type" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {TYPE_OPTIONS.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
+                  {TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
                       <span className="flex items-center gap-2">
-                        <QTBIcon name={t.icon} size={13} />
-                        {t.label}
+                        <QTBIcon name={opt.icon} size={13} />
+                        {t(opt.labelKey)}
                       </span>
                     </SelectItem>
                   ))}
@@ -194,7 +211,7 @@ export default function AdminNotificationsView() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="bc-audience">Audience</Label>
+              <Label htmlFor="bc-audience">{t("ad.notif.audienceLabel")}</Label>
               <Select value={audience} onValueChange={setAudience}>
                 <SelectTrigger id="bc-audience" className="w-full">
                   <SelectValue />
@@ -202,7 +219,7 @@ export default function AdminNotificationsView() {
                 <SelectContent>
                   {AUDIENCE_OPTIONS.map((a) => (
                     <SelectItem key={a.value} value={a.value}>
-                      {a.label}
+                      {t(a.labelKey)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -211,10 +228,10 @@ export default function AdminNotificationsView() {
           </div>
           <div className="flex items-center justify-between gap-3">
             <p className="text-[11px] text-neutral-400">
-              Audience lists are evaluated live — members join/leave segments automatically.
+              {t("ad.notif.audienceHint")}
             </p>
             <QTBButton onClick={() => void send()} loading={sending} className="shrink-0">
-              <QTBIcon name="send" size={15} /> Send Broadcast
+              <QTBIcon name="send" size={15} /> {t("ad.notif.sendBtn")}
             </QTBButton>
           </div>
         </div>
@@ -224,8 +241,8 @@ export default function AdminNotificationsView() {
       <div className="rounded-2xl border border-neutral-200 bg-white">
         <div className="flex items-center justify-between gap-3 border-b border-neutral-100 p-5">
           <div>
-            <h2 className="text-base font-bold text-neutral-900">Sent</h2>
-            <p className="text-xs text-neutral-400">This session, newest first.</p>
+            <h2 className="text-base font-bold text-neutral-900">{t("ad.notif.sentHeading")}</h2>
+            <p className="text-xs text-neutral-400">{t("ad.notif.sentDesc")}</p>
           </div>
           {sentList.length > 0 && (
             <Badge variant="outline" className="border-neutral-200 font-bold text-neutral-500">
@@ -237,8 +254,8 @@ export default function AdminNotificationsView() {
         {sentList.length === 0 ? (
           <EmptyState
             icon="megaphone"
-            title="Nothing sent yet"
-            description="Broadcasts you send from this device will appear here so you can undo mistakes."
+            title={t("ad.notif.emptyTitle")}
+            description={t("ad.notif.emptyDesc")}
           />
         ) : (
           <ul className="qtb-scroll max-h-[520px] space-y-2.5 overflow-y-auto p-4">
@@ -260,7 +277,7 @@ export default function AdminNotificationsView() {
                   <button
                     type="button"
                     onClick={() => setDeleteTarget(item)}
-                    aria-label={`Delete "${item.title}"`}
+                    aria-label={t("ad.notif.deleteAria", { title: item.title })}
                     className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-neutral-300 transition-colors hover:bg-rose-50 hover:text-rose-600"
                   >
                     <QTBIcon name="trash" size={15} />
@@ -273,13 +290,16 @@ export default function AdminNotificationsView() {
                       TYPE_CHIP[item.type]
                     )}
                   >
-                    {item.type}
+                    {TYPE_LABEL_KEY[item.type] ? t(TYPE_LABEL_KEY[item.type]) : item.type}
                   </span>
                   <span className="rounded border border-neutral-200 bg-white px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-neutral-500">
-                    {item.audience}
+                    {AUDIENCE_LABEL_KEY[item.audience] ? t(AUDIENCE_LABEL_KEY[item.audience]) : item.audience}
                   </span>
                   <span className="text-[10px] font-medium text-neutral-400">
-                    {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
+                    {formatDistanceToNow(new Date(item.createdAt), {
+                      addSuffix: true,
+                      locale: lang === "ar" ? arLocale : undefined,
+                    })}
                   </span>
                 </div>
               </motion.li>
@@ -292,19 +312,20 @@ export default function AdminNotificationsView() {
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this broadcast?</AlertDialogTitle>
+            <AlertDialogTitle>{t("ad.notif.confirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              “{deleteTarget?.title}” will be removed from every member inbox. This can&apos;t
-              be undone.
+              {deleteTarget
+                ? `${t("ad.notif.confirmDescA", { title: deleteTarget.title })} ${t("ad.notif.confirmDescB")}`
+                : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-rose-600 text-white hover:bg-rose-700"
               onClick={() => deleteTarget && void removeSent(deleteTarget)}
             >
-              Delete
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

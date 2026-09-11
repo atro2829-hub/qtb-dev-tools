@@ -2,6 +2,7 @@ import { geminiImageEdit, zaiImageEdit } from '@/lib/server/zai'
 import { getSessionUser, unauthorized } from '@/lib/auth'
 import { enforceQuota } from '@/lib/server/quota'
 import { db } from '@/lib/db'
+import { startRun, type RunHandle } from '@/lib/server/progress'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -21,10 +22,15 @@ export async function POST(request: Request) {
   if (denied) return denied
 
   let jobData: { fileName: string; detail: string } | null = null
+  let rh: RunHandle | null = null
 
   try {
     const form = await request.formData()
     const file = form.get('image')
+    const runKey = (form.get('run') instanceof String || typeof form.get('run') === 'string'
+      ? String(form.get('run'))
+      : ''
+    ).trim().slice(0, 80)
     if (!(file instanceof File) || file.size === 0) {
       return Response.json({ error: 'An image file is required' }, { status: 400 })
     }
@@ -39,6 +45,15 @@ export async function POST(request: Request) {
     }
 
     jobData = { fileName: file.name || 'image', detail: 'Background removal' }
+
+    rh = await startRun({
+      userId: session.id,
+      runKey,
+      toolType: 'bg-remove',
+      fileName: jobData.fileName,
+      targetFormat: 'png',
+    })
+    rh?.step(18, 'processing')
 
     const buffer = Buffer.from(await file.arrayBuffer())
     const dataUrl = `data:${file.type};base64,${buffer.toString('base64')}`
@@ -64,20 +79,26 @@ export async function POST(request: Request) {
       throw new Error('Empty response from background removal service')
     }
 
-    await db.toolJob.create({
-      data: {
-        userId: session.id,
-        toolType: 'bg-remove',
-        fileName: jobData.fileName,
-        status: 'completed',
-        detail: jobData.detail,
-      },
-    })
+    if (rh) {
+      await rh.finish(jobData.detail)
+    } else {
+      await db.toolJob.create({
+        data: {
+          userId: session.id,
+          toolType: 'bg-remove',
+          fileName: jobData.fileName,
+          status: 'completed',
+          detail: jobData.detail,
+        },
+      })
+    }
 
     return Response.json({ image: `data:image/png;base64,${base64}` })
   } catch (err) {
     console.error('[tools/bg-remove]', err)
-    if (session) {
+    if (rh) {
+      await rh.fail(err instanceof Error ? err.message.slice(0, 500) : 'Unknown error')
+    } else if (session) {
       await db.toolJob
         .create({
           data: {

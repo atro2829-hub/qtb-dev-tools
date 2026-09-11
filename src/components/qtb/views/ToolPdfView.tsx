@@ -3,10 +3,11 @@
 import { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  api,
+  archiveResult,
   base64ToBlob,
   downloadBlob,
   formatBytes,
+  uploadWithProgress,
 } from "@/lib/client-api";
 import { useQtbToast } from "@/components/qtb/use-qtb-toast";
 import { useAppStore } from "@/store/app-store";
@@ -19,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import ToolRecentRuns from "@/components/qtb/ToolRecentRuns";
+import RunMeter, { CloudLinkChip, type MeterPhase } from "@/components/qtb/RunMeter";
 import { cn } from "@/lib/utils";
 
 const MAX_TOTAL = 30 * 1024 * 1024; // 30 MB combined for merge
@@ -56,6 +58,13 @@ export default function ToolPdfView() {
 
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState<PdfResult | null>(null);
+
+  // real 1→100 run meter
+  const [meterPhase, setMeterPhase] = useState<MeterPhase>("idle");
+  const [uploadPct, setUploadPct] = useState(0);
+  const [uploadBytes, setUploadBytes] = useState(0);
+  const [runKey, setRunKey] = useState<string | null>(null);
+  const [cloudUrl, setCloudUrl] = useState<string | null>(null);
 
   const totalSize = files.reduce((s, f) => s + f.file.size, 0);
 
@@ -114,6 +123,7 @@ export default function ToolPdfView() {
   const run = async () => {
     if (loading) return;
     setDone(null);
+    setCloudUrl(null);
     setLoading(true);
     try {
       if (mode === "merge") {
@@ -122,18 +132,35 @@ export default function ToolPdfView() {
           setLoading(false);
           return;
         }
+        const key = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`).slice(0, 80);
+        setRunKey(key);
+        setUploadPct(0);
+        setMeterPhase("upload");
         const fd = new FormData();
         files.forEach((f) => fd.append("files", f.file));
-        const res = await api<{ fileName: string; dataBase64: string; pageCount: number }>(
+        fd.set("run", key);
+        const res = await uploadWithProgress<{ fileName: string; dataBase64: string; pageCount: number }>(
           "/api/tools/pdf-merge",
-          { method: "POST", body: fd }
+          fd,
+          (pct, loaded) => {
+            setUploadPct(pct);
+            setUploadBytes(loaded);
+            if (pct >= 100) setMeterPhase("process"); // body fully sent → server is working
+          }
         );
         setDone({
           fileName: res.fileName,
           blob: base64ToBlob(res.dataBase64, "application/pdf"),
           detail: t("pdf.mergedDetail", { count: files.length, pages: res.pageCount }),
         });
+        setMeterPhase("idle");
         toast.success(t("pdf.mergeDone"), t("pdf.mergeDoneSub", { n: files.length }));
+        // Fire-and-forget cloud permalink for the merged PDF.
+        archiveResult(base64ToBlob(res.dataBase64, "application/pdf"), res.fileName, "pdf-merge", key)
+          .then((url) => {
+            if (url) setCloudUrl(url);
+          })
+          .catch(() => {});
       } else {
         if (!splitFile) {
           toast.error(new Error(t("pdf.uploadFirst")), t("pdf.noFile"));
@@ -145,21 +172,39 @@ export default function ToolPdfView() {
           setLoading(false);
           return;
         }
+        const key = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`).slice(0, 80);
+        setRunKey(key);
+        setUploadPct(0);
+        setMeterPhase("upload");
         const fd = new FormData();
         fd.set("file", splitFile);
         fd.set("pages", pages);
-        const res = await api<{ fileName: string; dataBase64: string; pageCount: number }>(
+        fd.set("run", key);
+        const res = await uploadWithProgress<{ fileName: string; dataBase64: string; pageCount: number }>(
           "/api/tools/pdf-split",
-          { method: "POST", body: fd }
+          fd,
+          (pct, loaded) => {
+            setUploadPct(pct);
+            setUploadBytes(loaded);
+            if (pct >= 100) setMeterPhase("process"); // body fully sent → server is working
+          }
         );
         setDone({
           fileName: res.fileName,
           blob: base64ToBlob(res.dataBase64, "application/pdf"),
           detail: t("pdf.extractedDetail", { pages: res.pageCount }),
         });
+        setMeterPhase("idle");
         toast.success(t("pdf.splitDone"), t("pdf.splitDoneSub", { n: res.pageCount }));
+        // Fire-and-forget cloud permalink for the extracted PDF.
+        archiveResult(base64ToBlob(res.dataBase64, "application/pdf"), res.fileName, "pdf-split", key)
+          .then((url) => {
+            if (url) setCloudUrl(url);
+          })
+          .catch(() => {});
       }
     } catch (err) {
+      setMeterPhase("idle");
       toast.error(err, mode === "merge" ? t("pdf.mergeFailed") : t("pdf.splitFailed"));
     } finally {
       setLoading(false);
@@ -171,6 +216,10 @@ export default function ToolPdfView() {
     setSplitFile(null);
     setPages("");
     setDone(null);
+    setMeterPhase("idle");
+    setUploadPct(0);
+    setRunKey(null);
+    setCloudUrl(null);
     if (mode === "merge") {
       if (mergeInputRef.current) mergeInputRef.current.value = "";
     } else if (splitInputRef.current) {
@@ -323,7 +372,18 @@ export default function ToolPdfView() {
               />
             </div>
 
-            <ResultPanel done={done} loading={loading} modeLabel={t("pdf.nothingMerged")} modeHint={t("pdf.mergeHint")} />
+            <ResultPanel
+              done={done}
+              loading={loading}
+              modeLabel={t("pdf.nothingMerged")}
+              modeHint={t("pdf.mergeHint")}
+              meterPhase={meterPhase}
+              uploadPct={uploadPct}
+              uploadBytes={uploadBytes}
+              totalBytes={totalSize}
+              runKey={runKey}
+              cloudUrl={cloudUrl}
+            />
           </div>
         </TabsContent>
 
@@ -401,7 +461,18 @@ export default function ToolPdfView() {
               </div>
             </div>
 
-            <ResultPanel done={done} loading={loading} modeLabel={t("pdf.nothingExtracted")} modeHint={t("pdf.splitHint")} />
+            <ResultPanel
+              done={done}
+              loading={loading}
+              modeLabel={t("pdf.nothingExtracted")}
+              modeHint={t("pdf.splitHint")}
+              meterPhase={meterPhase}
+              uploadPct={uploadPct}
+              uploadBytes={uploadBytes}
+              totalBytes={splitFile?.size ?? 0}
+              runKey={runKey}
+              cloudUrl={cloudUrl}
+            />
           </div>
         </TabsContent>
       </Tabs>
@@ -428,13 +499,26 @@ function ResultPanel({
   loading,
   modeLabel,
   modeHint,
+  meterPhase,
+  uploadPct,
+  uploadBytes,
+  totalBytes,
+  runKey,
+  cloudUrl,
 }: {
   done: PdfResult | null;
   loading: boolean;
   modeLabel: string;
   modeHint: string;
+  meterPhase: MeterPhase;
+  uploadPct: number;
+  uploadBytes: number;
+  totalBytes: number;
+  runKey: string | null;
+  cloudUrl: string | null;
 }) {
   const t = useAppStore((s) => s.t);
+  const toast = useQtbToast();
   return (
     <div className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-6">
       <h2 className="mb-4 text-sm font-bold uppercase tracking-wider text-neutral-500">
@@ -442,16 +526,15 @@ function ResultPanel({
       </h2>
       {loading ? (
         <div className="flex min-h-52 flex-col items-center justify-center gap-4 rounded-2xl border border-neutral-100 bg-neutral-50/60 p-8">
-          <div className="qtb-spinner" />
+          <RunMeter
+            phase={meterPhase}
+            uploadPct={uploadPct}
+            uploadedBytes={uploadBytes}
+            totalBytes={totalBytes}
+            runKey={runKey}
+            className="w-full max-w-sm"
+          />
           <p className="text-sm font-semibold text-neutral-600">{t("pdf.working")}</p>
-          <div className="w-full max-w-xs overflow-hidden rounded-full bg-neutral-200">
-            <motion.div
-              className="h-2 rounded-full bg-gradient-to-r from-amber-400 via-fuchsia-500 to-emerald-400"
-              initial={{ width: "8%" }}
-              animate={{ width: ["8%", "70%", "92%"] }}
-              transition={{ duration: 2.2, ease: "easeInOut", repeat: Infinity }}
-            />
-          </div>
         </div>
       ) : done ? (
         <motion.div
@@ -464,6 +547,10 @@ function ResultPanel({
           </span>
           <p className="max-w-full truncate text-sm font-bold text-neutral-800">{done.fileName}</p>
           <p className="text-xs font-semibold text-emerald-700">{done.detail}</p>
+          <CloudLinkChip
+            url={cloudUrl}
+            onCopied={() => toast.success(t("au.linkCopied"), t("au.linkCopiedSub"))}
+          />
           <QTBButton
             wrapperClassName="w-full sm:w-auto [&>button]:w-full"
             onClick={() => downloadBlob(done.blob, done.fileName)}

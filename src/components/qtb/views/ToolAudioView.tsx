@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { api } from "@/lib/client-api";
+import { api, uploadWithProgress, archiveResult } from "@/lib/client-api";
 import { useQtbToast } from "@/components/qtb/use-qtb-toast";
 import { useAppStore } from "@/store/app-store";
 import QTBIcon from "@/components/qtb/QTBIcon";
@@ -20,6 +20,7 @@ import {
 } from "@/lib/client-audio-pdf";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ToolRecentRuns from "@/components/qtb/ToolRecentRuns";
+import RunMeter, { CloudLinkChip, type MeterPhase } from "@/components/qtb/RunMeter";
 import { cn } from "@/lib/utils";
 
 const MAX_BYTES = 14 * 1024 * 1024; // 14 MB
@@ -109,6 +110,13 @@ export default function ToolAudioView() {
   const [showTranscript, setShowTranscript] = useState(false);
   const [building, setBuilding] = useState(false);
 
+  // real 1→100 run meter
+  const [meterPhase, setMeterPhase] = useState<MeterPhase>("idle");
+  const [uploadPct, setUploadPct] = useState(0);
+  const [uploadBytes, setUploadBytes] = useState(0);
+  const [runKey, setRunKey] = useState<string | null>(null);
+  const [cloudUrl, setCloudUrl] = useState<string | null>(null);
+
   const busy = phase === "transcribe" || phase === "organize";
 
   useEffect(() => {
@@ -151,6 +159,10 @@ export default function ToolAudioView() {
     setResult(null);
     setShowTranscript(false);
     setPhase("idle");
+    setMeterPhase("idle");
+    setUploadPct(0);
+    setRunKey(null);
+    setCloudUrl(null);
     if (inputRef.current) inputRef.current.value = "";
   };
 
@@ -238,25 +250,50 @@ export default function ToolAudioView() {
     runningRef.current = true;
     setResult(null);
     setShowTranscript(false);
+    setCloudUrl(null);
     setPhase("transcribe");
+    const key = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`).slice(0, 80);
+    setRunKey(key);
+    setUploadPct(0);
+    setMeterPhase("upload");
     try {
       const fd = new FormData();
       fd.set("file", file);
       fd.set("style", style);
       fd.set("targetLang", targetLang);
       fd.set("duration", formatDuration(duration));
+      fd.set("run", key);
       setPhase("organize");
-      const res = await api<{
+      const res = await uploadWithProgress<{
         doc: SmartAudioDoc;
         transcript: string;
         engine?: { organize?: string; transcribe?: string };
         durationLabel?: string;
-      }>("/api/tools/audio-pdf", { method: "POST", body: fd });
+      }>(
+        "/api/tools/audio-pdf",
+        fd,
+        (pct, loaded) => {
+          setUploadPct(pct);
+          setUploadBytes(loaded);
+          if (pct >= 100) setMeterPhase("process"); // body fully sent → server is working
+        }
+      );
       setResult({ doc: res.doc, transcript: res.transcript, engine: res.engine });
       setPhase("done");
+      setMeterPhase("idle");
       toast.success(t("au.doneToast"), t("au.doneToastSub"));
+      // Fire-and-forget cloud permalink for the raw transcript.
+      try {
+        const base = sanitizeFileBase(res.doc.title || file.name || "transcript");
+        const txt = new Blob([res.transcript], { type: "text/plain;charset=utf-8" });
+        const url = await archiveResult(txt, `${base}.txt`, "audio-pdf", key);
+        if (url) setCloudUrl(url);
+      } catch {
+        /* cloud archive is optional sugar */
+      }
     } catch (err) {
       setPhase("idle");
+      setMeterPhase("idle");
       toast.error(err, t("au.failed"));
     } finally {
       runningRef.current = false;
@@ -284,6 +321,15 @@ export default function ToolAudioView() {
       setResult((r) => (r ? { ...r, pdfBlob: blob } : r));
       setPhase("done");
       toast.success(t("au.pdfReady"), t("au.pdfReadySub"));
+      // Refresh the cloud permalink with the richer PDF artifact.
+      const key = runKey;
+      if (key) {
+        archiveResult(blob, `${base}.pdf`, "audio-pdf", key)
+          .then((url) => {
+            if (url) setCloudUrl(url);
+          })
+          .catch(() => {});
+      }
     } catch (err) {
       setPhase("done");
       toast.error(err, t("au.pdfFailed"));
@@ -563,7 +609,14 @@ export default function ToolAudioView() {
 
           {busy || phase === "pdf" ? (
             <div className="flex min-h-52 flex-col items-center justify-center gap-5 rounded-2xl border border-neutral-100 bg-neutral-50/60 p-8">
-              <div className="qtb-spinner" />
+              <RunMeter
+                phase={meterPhase}
+                uploadPct={uploadPct}
+                uploadedBytes={uploadBytes}
+                totalBytes={file?.size ?? 0}
+                runKey={runKey}
+                className="w-full max-w-sm"
+              />
               <div className="w-full max-w-xs space-y-2.5">
                 {(["transcribe", "organize", "pdf"] as const).map((step, i) => {
                   const order: Phase[] = ["transcribe", "organize", "pdf"];
@@ -634,6 +687,7 @@ export default function ToolAudioView() {
                       {result.engine.transcribe.split(":")[0]} + {result.engine.organize?.split(":")[0] ?? ""}
                     </span>
                   )}
+                  <CloudLinkChip url={cloudUrl} onCopied={() => toast.success(t("au.linkCopied"), t("au.linkCopiedSub"))} />
                 </div>
               </div>
 

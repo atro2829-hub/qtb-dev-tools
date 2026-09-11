@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { api, apiJson } from "@/lib/client-api";
 import { useQtbToast } from "@/components/qtb/use-qtb-toast";
+import { useAppStore } from "@/store/app-store";
 import QTBIcon from "@/components/qtb/QTBIcon";
 import QTBButton from "@/components/qtb/QTBButton";
 import { GradientChip, EmptyState } from "@/components/qtb/ui-bits";
@@ -127,6 +128,7 @@ function BankIconPreview({ markup, className }: { markup: string; className?: st
 
 export default function AdminBanksView() {
   const toast = useQtbToast();
+  const t = useAppStore((s) => s.t);
   const [banks, setBanks] = useState<BankRow[] | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -149,7 +151,7 @@ export default function AdminBanksView() {
       .catch((err) => {
         if (active) {
           setBanks([]);
-          toast.error(err, "Couldn't load bank accounts");
+          toast.error(err, t("ad.banks.loadFailed"));
         }
       });
     return () => {
@@ -189,7 +191,7 @@ export default function AdminBanksView() {
       form.accountName.trim().length === 0 ||
       form.accountNumber.trim().length === 0
     ) {
-      toast.info("Missing details", "Bank name, account name and account number are required.");
+      toast.info(t("ad.banks.missingTitle"), t("ad.banks.missingSub"));
       return;
     }
     setSaving(true);
@@ -204,16 +206,16 @@ export default function AdminBanksView() {
         setBanks((list) =>
           list ? list.map((b) => (b.id === editingId && updated ? updated : b)) : list
         );
-        toast.success("Bank account updated", payload.bankName);
+        toast.success(t("ad.banks.updated"), payload.bankName);
       } else {
         const res = await apiJson<{ bank?: unknown }>("/api/admin/banks", "POST", payload);
         const created = normalizeBank(res.bank);
         if (created) setBanks((list) => [created, ...(list ?? [])]);
-        toast.success("Bank account added", payload.bankName);
+        toast.success(t("ad.banks.added"), payload.bankName);
       }
       setDialogOpen(false);
     } catch (err) {
-      toast.error(err, "Save failed");
+      toast.error(err, t("ad.banks.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -231,11 +233,11 @@ export default function AdminBanksView() {
         list ? list.map((b) => (b.id === bank.id && updated ? updated : b)) : list
       );
       toast.success(
-        active ? "Account shown to members" : "Account hidden from members",
+        active ? t("ad.banks.shown") : t("ad.banks.hidden"),
         bank.bankName
       );
     } catch (err) {
-      toast.error(err, "Couldn't update account");
+      toast.error(err, t("ad.banks.toggleFailed"));
     } finally {
       setBusyId(null);
     }
@@ -245,9 +247,9 @@ export default function AdminBanksView() {
     try {
       await apiJson(`/api/admin/banks?id=${encodeURIComponent(bank.id)}`, "DELETE");
       setBanks((list) => (list ? list.filter((b) => b.id !== bank.id) : list));
-      toast.success("Bank account deleted", bank.bankName);
+      toast.success(t("ad.banks.deleted"), bank.bankName);
     } catch (err) {
-      toast.error(err, "Delete failed");
+      toast.error(err, t("ad.banks.deleteFailed"));
     } finally {
       setDeleteTarget(null);
     }
@@ -260,14 +262,14 @@ export default function AdminBanksView() {
         <div className="flex items-center gap-3">
           <GradientChip icon="bank" tone="emerald" />
           <div>
-            <h2 className="text-base font-bold text-neutral-900">Bank Accounts</h2>
+            <h2 className="text-base font-bold text-neutral-900">{t("ad.banks.title")}</h2>
             <p className="text-xs text-neutral-400">
-              Payment destinations shown on the subscription page.
+              {t("ad.banks.desc")}
             </p>
           </div>
         </div>
         <QTBButton size="sm" onClick={openCreate} className="shrink-0">
-          <QTBIcon name="plus" size={15} /> Add Bank Account
+          <QTBIcon name="plus" size={15} /> {t("ad.banks.add")}
         </QTBButton>
       </div>
 
@@ -287,11 +289,11 @@ export default function AdminBanksView() {
         <div className="rounded-2xl border border-neutral-200 bg-white">
           <EmptyState
             icon="bank"
-            title="No bank accounts yet"
-            description="Add your first payment destination so members can subscribe."
+            title={t("ad.banks.emptyTitle")}
+            description={t("ad.banks.emptyDesc")}
             action={
               <QTBButton size="sm" onClick={openCreate}>
-                <QTBIcon name="plus" size={15} /> Add Bank Account
+                <QTBIcon name="plus" size={15} /> {t("ad.banks.add")}
               </QTBButton>
             }
           />
@@ -334,12 +336,12 @@ export default function AdminBanksView() {
                     {bank.currency}
                   </Badge>
                   <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-neutral-400">
-                    Active
+                    {t("ad.banks.active")}
                     <Switch
                       checked={bank.active}
                       disabled={busyId === bank.id}
                       onCheckedChange={(v) => void toggleActive(bank, v)}
-                      aria-label={`Toggle ${bank.bankName} active`}
+                      aria-label={t("ad.banks.toggleAria", { name: bank.bankName })}
                     />
                   </label>
                 </div>
@@ -348,7 +350,7 @@ export default function AdminBanksView() {
               <div className="mt-4 space-y-1.5 rounded-xl bg-neutral-50/80 p-3 text-sm">
                 <p className="flex items-center justify-between gap-2">
                   <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                    Number
+                    {t("ad.banks.number")}
                   </span>
                   <span className="font-mono text-xs font-bold text-neutral-800">
                     {bank.accountNumber}
@@ -380,7 +382,7 @@ export default function AdminBanksView() {
 
               <div className="mt-4 flex items-center justify-end gap-2 border-t border-neutral-100 pt-3">
                 <QTBButton size="sm" variant="ghost" onClick={() => openEdit(bank)}>
-                  <QTBIcon name="edit" size={14} /> Edit
+                  <QTBIcon name="edit" size={14} /> {t("common.edit")}
                 </QTBButton>
                 <QTBButton
                   size="sm"
@@ -388,7 +390,7 @@ export default function AdminBanksView() {
                   className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
                   onClick={() => setDeleteTarget(bank)}
                 >
-                  <QTBIcon name="trash" size={14} /> Delete
+                  <QTBIcon name="trash" size={14} /> {t("common.delete")}
                 </QTBButton>
               </div>
             </motion.div>
@@ -400,18 +402,18 @@ export default function AdminBanksView() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-h-[88vh] overflow-y-auto qtb-scroll sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingId ? "Edit Bank Account" : "Add Bank Account"}</DialogTitle>
+            <DialogTitle>{editingId ? t("ad.banks.editTitle") : t("ad.banks.add")}</DialogTitle>
             <DialogDescription>
               {editingId
-                ? "Update the payment details below and save."
-                : "Members will copy these details when paying for a subscription."}
+                ? t("ad.banks.editDesc")
+                : t("ad.banks.addDesc")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="bank-name">Bank name *</Label>
+                <Label htmlFor="bank-name">{t("ad.banks.bankName")}</Label>
                 <Input
                   id="bank-name"
                   value={form.bankName}
@@ -421,7 +423,7 @@ export default function AdminBanksView() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="bank-account-name">Account name *</Label>
+                <Label htmlFor="bank-account-name">{t("ad.banks.accountName")}</Label>
                 <Input
                   id="bank-account-name"
                   value={form.accountName}
@@ -431,7 +433,7 @@ export default function AdminBanksView() {
                 />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="bank-number">Account number *</Label>
+                <Label htmlFor="bank-number">{t("ad.banks.accountNumber")}</Label>
                 <Input
                   id="bank-number"
                   value={form.accountNumber}
@@ -468,7 +470,7 @@ export default function AdminBanksView() {
             {/* Currency */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="bank-currency">Currency</Label>
+                <Label htmlFor="bank-currency">{t("ad.banks.currency")}</Label>
                 <Select
                   value={customCurrency ? "OTHER" : form.currency}
                   onValueChange={(v) => {
@@ -481,7 +483,7 @@ export default function AdminBanksView() {
                   }}
                 >
                   <SelectTrigger id="bank-currency" className="w-full">
-                    <SelectValue placeholder="Select currency" />
+                    <SelectValue placeholder={t("ad.banks.selectCurrency")} />
                   </SelectTrigger>
                   <SelectContent>
                     {CURRENCY_OPTIONS.map((c) => (
@@ -489,13 +491,13 @@ export default function AdminBanksView() {
                         {c}
                       </SelectItem>
                     ))}
-                    <SelectItem value="OTHER">Other…</SelectItem>
+                    <SelectItem value="OTHER">{t("ad.banks.other")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               {customCurrency && (
                 <div className="space-y-2">
-                  <Label htmlFor="bank-currency-other">Custom currency</Label>
+                  <Label htmlFor="bank-currency-other">{t("ad.banks.customCurrency")}</Label>
                   <Input
                     id="bank-currency-other"
                     value={KNOWN_CURRENCIES.has(form.currency) ? "" : form.currency}
@@ -510,20 +512,20 @@ export default function AdminBanksView() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="bank-instructions">Payment instructions</Label>
+              <Label htmlFor="bank-instructions">{t("ad.banks.instructions")}</Label>
               <Textarea
                 id="bank-instructions"
                 value={form.instructions}
                 onChange={(e) => patchForm({ instructions: e.target.value })}
                 maxLength={2000}
                 rows={3}
-                placeholder="Transfer the subscription amount, then submit your payment reference…"
+                placeholder={t("ad.banks.instructionsPh")}
               />
             </div>
 
             {/* Icon SVG */}
             <div className="space-y-2">
-              <Label htmlFor="bank-icon">Icon (SVG path markup)</Label>
+              <Label htmlFor="bank-icon">{t("ad.banks.iconLabel")}</Label>
               <div className="flex items-start gap-3">
                 <span className="mt-1 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 text-neutral-700">
                   {form.iconSvg.trim() ? (
@@ -543,17 +545,17 @@ export default function AdminBanksView() {
                 />
               </div>
               <p className="text-[11px] text-neutral-400">
-                Rendered live inside a 24×24 stroke frame — leave empty for the default bank icon.
+                {t("ad.banks.iconHint")}
               </p>
             </div>
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0">
             <QTBButton variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancel
+              {t("common.cancel")}
             </QTBButton>
             <QTBButton loading={saving} onClick={() => void submitForm()}>
-              <QTBIcon name="check" size={15} /> {editingId ? "Save Changes" : "Add Account"}
+              <QTBIcon name="check" size={15} /> {editingId ? t("ad.banks.saveChanges") : t("ad.banks.addAccount")}
             </QTBButton>
           </DialogFooter>
         </DialogContent>
@@ -563,19 +565,20 @@ export default function AdminBanksView() {
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this bank account?</AlertDialogTitle>
+            <AlertDialogTitle>{t("ad.banks.deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              “{deleteTarget?.bankName}” will no longer be selectable on the subscription page.
-              Existing requests keep their recorded bank name. This can&apos;t be undone.
+              {deleteTarget
+                ? `${t("ad.banks.deleteDescA", { name: deleteTarget.bankName })} ${t("ad.banks.deleteDescB")}`
+                : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-rose-600 text-white hover:bg-rose-700"
               onClick={() => deleteTarget && void removeBank(deleteTarget)}
             >
-              Delete
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

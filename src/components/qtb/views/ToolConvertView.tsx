@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   api,
+  archiveResult,
   base64ToBlob,
   downloadBlob,
   formatBytes,
+  uploadWithProgress,
 } from "@/lib/client-api";
 import { useQtbToast } from "@/components/qtb/use-qtb-toast";
 import { useAppStore } from "@/store/app-store";
@@ -24,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import ToolRecentRuns from "@/components/qtb/ToolRecentRuns";
+import RunMeter, { CloudLinkChip, type MeterPhase } from "@/components/qtb/RunMeter";
 import { cn } from "@/lib/utils";
 
 const DOC_EXTS = ["pdf", "docx", "doc", "txt"];
@@ -91,6 +94,13 @@ export default function ToolConvertView() {
   const [done, setDone] = useState<{ fileName: string; blob: Blob } | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
+  // real 1→100 run meter
+  const [meterPhase, setMeterPhase] = useState<MeterPhase>("idle");
+  const [uploadPct, setUploadPct] = useState(0);
+  const [uploadBytes, setUploadBytes] = useState(0);
+  const [runKey, setRunKey] = useState<string | null>(null);
+  const [cloudUrl, setCloudUrl] = useState<string | null>(null);
+
   const ext = (file?.name.split(".").pop() ?? "").toLowerCase();
   const validTargets = targetsFor(ext);
 
@@ -123,6 +133,7 @@ export default function ToolConvertView() {
     runningRef.current = true;
     setLoading(true);
     try {
+      setCloudUrl(null);
       const isImageToImage =
         IMG_EXTS.includes(ext) && ["png", "jpg", "webp"].includes(target);
 
@@ -152,9 +163,14 @@ export default function ToolConvertView() {
         return;
       }
 
+      const key = (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`).slice(0, 80);
+      setRunKey(key);
+      setUploadPct(0);
+      setMeterPhase("upload");
       const fd = new FormData();
       fd.set("file", file);
       fd.set("targetFormat", target);
+      fd.set("run", key);
       // PDF text is extracted IN THE BROWSER (pdf.js) — the Cloudflare
       // Workers runtime cannot run pdfjs server-side.
       if (ext === "pdf") {
@@ -170,14 +186,27 @@ export default function ToolConvertView() {
         }
         fd.set("extractedText", text);
       }
-      const res = await api<{ fileName: string; mimeType: string; dataBase64: string }>(
+      const res = await uploadWithProgress<{ fileName: string; mimeType: string; dataBase64: string }>(
         "/api/tools/convert",
-        { method: "POST", body: fd }
+        fd,
+        (pct, loaded) => {
+          setUploadPct(pct);
+          setUploadBytes(loaded);
+          if (pct >= 100) setMeterPhase("process"); // body fully sent → server is working
+        }
       );
       const blob = base64ToBlob(res.dataBase64, res.mimeType || "application/octet-stream");
       setDone({ fileName: res.fileName || `converted.${target}`, blob });
+      setMeterPhase("idle");
       toast.success(t("cv.done"), t("tool.ready"));
+      // Fire-and-forget cloud permalink for the converted document.
+      archiveResult(blob, res.fileName || `converted.${target}`, "convert", key)
+        .then((url) => {
+          if (url) setCloudUrl(url);
+        })
+        .catch(() => {});
     } catch (err) {
+      setMeterPhase("idle");
       toast.error(err, t("cv.failed"));
     } finally {
       runningRef.current = false;
@@ -189,6 +218,10 @@ export default function ToolConvertView() {
     setFile(null);
     setTarget("");
     setDone(null);
+    setMeterPhase("idle");
+    setUploadPct(0);
+    setRunKey(null);
+    setCloudUrl(null);
   };
 
   return (
@@ -329,28 +362,29 @@ export default function ToolConvertView() {
           </h2>
           {loading ? (
             <div className="flex min-h-56 flex-col items-center justify-center gap-4 rounded-2xl border border-neutral-100 bg-neutral-50/60 p-8">
-              <div className="qtb-spinner" />
+              <RunMeter
+                phase={meterPhase}
+                uploadPct={uploadPct}
+                uploadedBytes={uploadBytes}
+                totalBytes={file?.size ?? 0}
+                runKey={runKey}
+                className="w-full max-w-sm"
+              />
               <p className="text-sm font-semibold text-neutral-600">
                 {readingPdf !== null
                   ? t("tool.readingPdf", { pct: readingPdf })
                   : t("tool.converting")}
               </p>
-              <div className="w-full max-w-xs overflow-hidden rounded-full bg-neutral-200">
-                <motion.div
-                  className="h-2 rounded-full bg-gradient-to-r from-amber-400 via-fuchsia-500 to-emerald-400"
-                  initial={{ width: "8%" }}
-                  animate={
-                    readingPdf !== null
-                      ? { width: `${Math.max(8, readingPdf)}%` }
-                      : { width: ["8%", "70%", "92%"] }
-                  }
-                  transition={
-                    readingPdf !== null
-                      ? { duration: 0.2 }
-                      : { duration: 2.2, ease: "easeInOut", repeat: Infinity }
-                  }
-                />
-              </div>
+              {readingPdf !== null && (
+                <div className="w-full max-w-xs overflow-hidden rounded-full bg-neutral-200">
+                  <motion.div
+                    className="h-2 rounded-full bg-gradient-to-r from-amber-400 via-fuchsia-500 to-emerald-400"
+                    initial={{ width: "8%" }}
+                    animate={{ width: `${Math.max(8, readingPdf)}%` }}
+                    transition={{ duration: 0.2 }}
+                  />
+                </div>
+              )}
             </div>
           ) : done ? (
             <motion.div
@@ -364,6 +398,10 @@ export default function ToolConvertView() {
               <p className="max-w-full truncate text-sm font-bold text-neutral-800">
                 {done.fileName}
               </p>
+              <CloudLinkChip
+                url={cloudUrl}
+                onCopied={() => toast.success(t("au.linkCopied"), t("au.linkCopiedSub"))}
+              />
               <QTBButton
                 wrapperClassName="w-full sm:w-auto [&>button]:w-full"
                 onClick={() => downloadBlob(done.blob, done.fileName)}

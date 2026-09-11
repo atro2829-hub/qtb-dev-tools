@@ -18,6 +18,7 @@ import {
 } from "recharts";
 import { api, apiJson } from "@/lib/client-api";
 import { useQtbToast } from "@/components/qtb/use-qtb-toast";
+import { useAppStore } from "@/store/app-store";
 import QTBIcon, { type QTBIconName } from "@/components/qtb/QTBIcon";
 import QTBButton from "@/components/qtb/QTBButton";
 import { GradientChip } from "@/components/qtb/ui-bits";
@@ -161,18 +162,19 @@ interface AnalyticsData {
   topUsers?: { name: string; email: string; jobs: number; plan: "free" | "pro" }[];
 }
 
-const TOOL_LABELS: Record<string, string> = {
-  "bg-remove": "Background",
-  convert: "Converter",
-  translate: "Translator",
-  "pdf-merge": "PDF Merge",
-  "pdf-split": "PDF Split",
+const TOOL_LABEL_KEYS: Record<string, string> = {
+  "bg-remove": "aj.toolBg",
+  convert: "aj.toolConvert",
+  translate: "aj.toolTranslate",
+  "pdf-merge": "aj.toolMerge",
+  "pdf-split": "aj.toolSplit",
 };
 
 const TOOL_COLORS = ["#d946ef", "#f59e0b", "#10b981", "#8b5cf6", "#f43f5e"];
 
 export default function AdminMonetizationView() {
   const toast = useQtbToast();
+  const t = useAppStore((s) => s.t);
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [freeTrialEnabled, setFreeTrialEnabled] = useState(true);
   const [freeTrialDays, setFreeTrialDays] = useState("365");
@@ -191,7 +193,7 @@ export default function AdminMonetizationView() {
       .catch((err) => {
         if (active) {
           setStats({ ...EMPTY_STATS });
-          toast.error(err, "Couldn't load stats");
+          toast.error(err, t("ad.mon.statsLoadFailed"));
         }
       });
     const configPromise = api<{ config?: Record<string, unknown> }>("/api/admin/config")
@@ -223,12 +225,12 @@ export default function AdminMonetizationView() {
   const saveTrial = async () => {
     const days = Number.parseInt(freeTrialDays, 10);
     if (!Number.isFinite(days) || days < 1 || days > 3650) {
-      toast.info("Invalid trial length", "Enter a whole number between 1 and 3650 days.");
+      toast.info(t("ad.mon.invalidTrial"), t("ad.mon.invalidTrialSub"));
       return;
     }
     const limit = Number.parseInt(freeDailyLimit, 10);
     if (!Number.isFinite(limit) || limit < 1 || limit > 1000) {
-      toast.info("Invalid daily limit", "Enter a whole number between 1 and 1000 uses.");
+      toast.info(t("ad.mon.invalidLimit"), t("ad.mon.invalidLimitSub"));
       return;
     }
     setSavingTrial(true);
@@ -239,11 +241,14 @@ export default function AdminMonetizationView() {
         freeDailyLimit: limit,
       });
       toast.success(
-        "Plan settings updated",
-        `Trials: ${freeTrialEnabled ? `${days} days` : "off"} · Free tier: ${limit} uses/day.`
+        t("ad.mon.planSaved"),
+        t("ad.mon.planSavedSub", {
+          trials: freeTrialEnabled ? t("ad.mon.trialDaysN", { n: days }) : t("ad.mon.trialOff"),
+          limit,
+        })
       );
     } catch (err) {
-      toast.error(err, "Couldn't save trial settings");
+      toast.error(err, t("ad.mon.trialSaveFailed"));
     } finally {
       setSavingTrial(false);
     }
@@ -253,16 +258,16 @@ export default function AdminMonetizationView() {
     setSavingAnnounce(true);
     try {
       await apiJson("/api/admin/config", "PUT", { announcement });
-      toast.success("Announcement saved", "The banner updated for every visitor.");
+      toast.success(t("ad.mon.annSaved"), t("ad.mon.annSavedSub"));
     } catch (err) {
-      toast.error(err, "Couldn't save announcement");
+      toast.error(err, t("ad.mon.annSaveFailed"));
     } finally {
       setSavingAnnounce(false);
     }
   };
 
   const u = stats?.users;
-  const t = stats?.toolJobs;
+  const jb = stats?.toolJobs;
 
   return (
     <div className="space-y-5">
@@ -278,19 +283,19 @@ export default function AdminMonetizationView() {
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <StatCard icon="users" tone="amber" label="Total Users" value={u?.total ?? 0} delay={0} />
-            <StatCard icon="badge-check" tone="emerald" label="Active Members" value={u?.active ?? 0} delay={0.04} />
-            <StatCard icon="gift" tone="fuchsia" label="On Trial" value={u?.trials ?? 0} delay={0.08} />
-            <StatCard icon="clock" tone="rose" label="Expired" value={u?.expired ?? 0} delay={0.12} />
-            <StatCard icon="wallet" tone="violet" label="Pending Requests" value={u?.pendingRequests ?? 0} delay={0.16} />
-            <StatCard icon="megaphone" tone="amber" label="Notifications Sent" value={stats.notifications} delay={0.2} />
+            <StatCard icon="users" tone="amber" label={t("ad.mon.statUsers")} value={u?.total ?? 0} delay={0} />
+            <StatCard icon="badge-check" tone="emerald" label={t("ad.mon.statActive")} value={u?.active ?? 0} delay={0.04} />
+            <StatCard icon="gift" tone="fuchsia" label={t("ad.mon.statTrials")} value={u?.trials ?? 0} delay={0.08} />
+            <StatCard icon="clock" tone="rose" label={t("ad.mon.statExpired")} value={u?.expired ?? 0} delay={0.12} />
+            <StatCard icon="wallet" tone="violet" label={t("ad.mon.statPending")} value={u?.pendingRequests ?? 0} delay={0.16} />
+            <StatCard icon="megaphone" tone="amber" label={t("ad.mon.statNotifs")} value={stats.notifications} delay={0.2} />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard icon="bolt" tone="amber" label="Tool Jobs (all)" value={t?.total ?? 0} delay={0.24} />
-            <StatCard icon="remove-bg" tone="fuchsia" label="Background Removals" value={t?.bgRemove ?? 0} delay={0.28} />
-            <StatCard icon="convert" tone="emerald" label="Conversions" value={t?.convert ?? 0} delay={0.32} />
-            <StatCard icon="translate" tone="violet" label="Translations" value={t?.translate ?? 0} hint={`${t?.failed ?? 0} failed`} delay={0.36} />
+            <StatCard icon="bolt" tone="amber" label={t("ad.mon.statJobsAll")} value={jb?.total ?? 0} delay={0.24} />
+            <StatCard icon="remove-bg" tone="fuchsia" label={t("ad.mon.statBg")} value={jb?.bgRemove ?? 0} delay={0.28} />
+            <StatCard icon="convert" tone="emerald" label={t("ad.mon.statConvert")} value={jb?.convert ?? 0} delay={0.32} />
+            <StatCard icon="translate" tone="violet" label={t("ad.mon.statTranslate")} value={jb?.translate ?? 0} hint={t("ad.mon.statFailedHint", { n: jb?.failed ?? 0 })} delay={0.36} />
           </div>
         </>
       )}
@@ -300,9 +305,9 @@ export default function AdminMonetizationView() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2.5 text-base">
             <GradientChip icon="activity" tone="violet" size="sm" />
-            Usage Trends
+            {t("ad.mon.trendsTitle")}
           </CardTitle>
-          <CardDescription>Tool activity and new sign-ups over the last 14 days.</CardDescription>
+          <CardDescription>{t("ad.mon.trendsDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           {!analytics ? (
@@ -349,7 +354,7 @@ export default function AdminMonetizationView() {
                     <Area
                       type="monotone"
                       dataKey="jobs"
-                      name="Tool jobs"
+                      name={t("ad.mon.seriesJobs")}
                       stroke="#d946ef"
                       strokeWidth={2.5}
                       fill="url(#qtb-jobs-fill)"
@@ -357,7 +362,7 @@ export default function AdminMonetizationView() {
                     <Area
                       type="monotone"
                       dataKey="signups"
-                      name="Sign-ups"
+                      name={t("ad.mon.seriesSignups")}
                       stroke="#10b981"
                       strokeWidth={2.5}
                       fill="url(#qtb-signups-fill)"
@@ -369,14 +374,14 @@ export default function AdminMonetizationView() {
               <div className="grid gap-6 lg:grid-cols-2">
                 <div>
                   <p className="mb-3 text-xs font-bold uppercase tracking-wider text-neutral-500">
-                    Jobs by tool
+                    {t("ad.mon.jobsByTool")}
                   </p>
                   <div className="h-52 w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
-                        data={analytics.byTool.map((t) => ({
-                          ...t,
-                          label: TOOL_LABELS[t.toolType] ?? t.toolType,
+                        data={analytics.byTool.map((d) => ({
+                          ...d,
+                          label: TOOL_LABEL_KEYS[d.toolType] ? t(TOOL_LABEL_KEYS[d.toolType]) : d.toolType,
                         }))}
                         layout="vertical"
                         margin={{ top: 0, right: 16, left: 8, bottom: 0 }}
@@ -401,7 +406,7 @@ export default function AdminMonetizationView() {
                             fontWeight: 600,
                           }}
                         />
-                        <Bar dataKey="count" name="Jobs" radius={[0, 8, 8, 0]} barSize={18}>
+                        <Bar dataKey="count" name={t("ad.mon.jobs")} radius={[0, 8, 8, 0]} barSize={18}>
                           {analytics.byTool.map((entry, i) => (
                             <Cell key={entry.toolType} fill={TOOL_COLORS[i % TOOL_COLORS.length]} />
                           ))}
@@ -414,7 +419,7 @@ export default function AdminMonetizationView() {
                   {analytics.byPlan && (
                     <div>
                       <p className="mb-3 text-xs font-bold uppercase tracking-wider text-neutral-500">
-                        Free vs Pro usage
+                        {t("ad.mon.freeVsPro")}
                       </p>
                       <div className="flex items-center gap-4 rounded-2xl border border-neutral-200 bg-neutral-50/60 p-4">
                         <div className="relative h-32 w-32 shrink-0">
@@ -422,8 +427,8 @@ export default function AdminMonetizationView() {
                             <PieChart>
                               <Pie
                                 data={[
-                                  { name: "Free", value: analytics.byPlan.free },
-                                  { name: "Pro", value: analytics.byPlan.pro },
+                                  { name: t("ad.mon.planFree"), value: analytics.byPlan.free },
+                                  { name: t("ad.mon.planPro"), value: analytics.byPlan.pro },
                                 ]}
                                 dataKey="value"
                                 innerRadius={40}
@@ -443,28 +448,29 @@ export default function AdminMonetizationView() {
                               {analytics.byPlan.free + analytics.byPlan.pro}
                             </span>
                             <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-                              jobs
+                              {t("ad.mon.jobs")}
                             </span>
                           </div>
                         </div>
                         <div className="min-w-0 flex-1 space-y-2.5">
                           <div className="flex items-center gap-2.5">
                             <span className="h-3 w-3 shrink-0 rounded-full bg-amber-500" />
-                            <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Free tier</span>
+                            <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">{t("ad.mon.freeTier")}</span>
                             <span className="ml-auto text-sm font-extrabold text-neutral-900">{analytics.byPlan.free}</span>
                           </div>
                           <div className="flex items-center gap-2.5">
                             <span className="h-3 w-3 shrink-0 rounded-full bg-fuchsia-500" />
-                            <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Pro / trial</span>
+                            <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">{t("ad.mon.proTrial")}</span>
                             <span className="ml-auto text-sm font-extrabold text-neutral-900">{analytics.byPlan.pro}</span>
                           </div>
                           {analytics.byPlan.free + analytics.byPlan.pro > 0 && (
                             <p className="border-t border-neutral-200 pt-2.5 text-[11px] leading-relaxed text-neutral-400">
-                              {Math.round(
-                                (analytics.byPlan.pro /
-                                  (analytics.byPlan.free + analytics.byPlan.pro)) * 100
-                              )}
-                              % of the last 14 days&apos; jobs came from paying or trialling members.
+                              {t("ad.mon.paidShare", {
+                                pct: Math.round(
+                                  (analytics.byPlan.pro /
+                                    (analytics.byPlan.free + analytics.byPlan.pro)) * 100
+                                ),
+                              })}
                             </p>
                           )}
                         </div>
@@ -474,15 +480,15 @@ export default function AdminMonetizationView() {
                   <div className="grid grid-cols-3 gap-3">
                     <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-50/60 p-4 text-center">
                       <p className="text-2xl font-extrabold text-neutral-900">{analytics.totals.users}</p>
-                      <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-neutral-400">Members</p>
+                      <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-neutral-400">{t("ad.mon.totMembers")}</p>
                     </div>
                     <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-50/60 p-4 text-center">
                       <p className="text-2xl font-extrabold text-neutral-900">{analytics.totals.jobs}</p>
-                      <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-neutral-400">All jobs</p>
+                      <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-neutral-400">{t("ad.mon.totJobs")}</p>
                     </div>
                     <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-50/60 p-4 text-center">
                       <p className="text-2xl font-extrabold text-fuchsia-600">{analytics.totals.pendingRequests}</p>
-                      <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-neutral-400">Pending</p>
+                      <p className="mt-1 text-[11px] font-bold uppercase tracking-wider text-neutral-400">{t("ad.mon.totPending")}</p>
                     </div>
                   </div>
                 </div>
@@ -498,9 +504,9 @@ export default function AdminMonetizationView() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2.5 text-base">
               <GradientChip icon="crown" tone="amber" size="sm" />
-              Top Consumers — Last 24h
+              {t("ad.mon.topTitle")}
             </CardTitle>
-            <CardDescription>Most active members in the past day.</CardDescription>
+            <CardDescription>{t("ad.mon.topDesc")}</CardDescription>
           </CardHeader>
           <CardContent>
             <ol className="space-y-2.5">
@@ -534,7 +540,7 @@ export default function AdminMonetizationView() {
                         : "bg-amber-100 text-amber-700"
                     )}
                   >
-                    {user.plan}
+                    {user.plan === "pro" ? t("ad.mon.planPro") : t("ad.mon.planFree")}
                   </span>
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-sm font-extrabold text-neutral-900 ring-1 ring-neutral-200">
                     <QTBIcon name="bolt" size={13} className="text-amber-500" />
@@ -552,30 +558,29 @@ export default function AdminMonetizationView() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2.5 text-base">
             <GradientChip icon="gift" tone="fuchsia" size="sm" />
-            No-Card Free Trial
+            {t("ad.mon.trialTitle")}
           </CardTitle>
           <CardDescription>
-            New members with the Free plan receive an instant trial when they submit a
-            subscription request — no payment proof required.
+            {t("ad.mon.trialDesc")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="flex items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-neutral-50/60 p-4">
             <div>
-              <p className="text-sm font-bold text-neutral-800">Enable free trial</p>
+              <p className="text-sm font-bold text-neutral-800">{t("ad.mon.trialEnable")}</p>
               <p className="mt-0.5 text-xs text-neutral-500">
-                Applies to accounts whose subscription status is still &quot;none&quot;.
+                {t("ad.mon.trialEnableHint")}
               </p>
             </div>
             <Switch
               checked={freeTrialEnabled}
               onCheckedChange={(v) => setFreeTrialEnabled(v)}
-              aria-label="Toggle free trial"
+              aria-label={t("ad.mon.trialAria")}
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="cfg-trial-days">Trial length (days)</Label>
+              <Label htmlFor="cfg-trial-days">{t("ad.mon.trialDays")}</Label>
               <Input
                 id="cfg-trial-days"
                 type="number"
@@ -586,7 +591,7 @@ export default function AdminMonetizationView() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cfg-daily-limit">Free tier daily uses</Label>
+              <Label htmlFor="cfg-daily-limit">{t("ad.mon.dailyLimit")}</Label>
               <Input
                 id="cfg-daily-limit"
                 type="number"
@@ -596,13 +601,13 @@ export default function AdminMonetizationView() {
                 onChange={(e) => setFreeDailyLimit(e.target.value)}
               />
               <p className="text-xs text-neutral-500">
-                Tool runs per day for accounts without an active plan.
+                {t("ad.mon.dailyLimitHint")}
               </p>
             </div>
           </div>
           <div className="flex justify-end">
             <QTBButton size="sm" loading={savingTrial} onClick={() => void saveTrial()}>
-              <QTBIcon name="check" size={15} /> Save Plan Settings
+              <QTBIcon name="check" size={15} /> {t("ad.mon.savePlan")}
             </QTBButton>
           </div>
         </CardContent>
@@ -613,10 +618,10 @@ export default function AdminMonetizationView() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2.5 text-base">
             <GradientChip icon="megaphone" tone="rose" size="sm" />
-            Quick Announcement
+            {t("ad.mon.annTitle")}
           </CardTitle>
           <CardDescription>
-            A fast way to update the site-wide banner. Leave empty to hide it.
+            {t("ad.mon.annDesc")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -625,11 +630,11 @@ export default function AdminMonetizationView() {
             onChange={(e) => setAnnouncement(e.target.value)}
             rows={3}
             maxLength={5000}
-            placeholder="e.g. Launch week: all tools unlocked for new members!"
+            placeholder={t("ad.mon.annPh")}
           />
           <div className="flex justify-end">
             <QTBButton size="sm" loading={savingAnnounce} onClick={() => void saveAnnouncement()}>
-              <QTBIcon name="send" size={15} /> Save Announcement
+              <QTBIcon name="send" size={15} /> {t("ad.mon.saveAnnouncement")}
             </QTBButton>
           </div>
         </CardContent>

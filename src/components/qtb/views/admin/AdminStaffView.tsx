@@ -63,6 +63,17 @@ function normalizeRole(v: unknown): UserRole {
   return v === "staff" || v === "admin" || v === "super_admin" ? v : "user";
 }
 
+const ROLE_LABEL_KEY: Record<UserRole, string> = {
+  user: "ad.role.user",
+  staff: "ad.role.staff",
+  admin: "ad.role.admin",
+  super_admin: "ad.role.superAdmin",
+};
+
+function roleKey(role: UserRole): string {
+  return ROLE_LABEL_KEY[role];
+}
+
 function normalizeUserRow(raw: unknown): AdminUserRow | null {
   if (typeof raw !== "object" || raw === null) return null;
   const u = raw as Record<string, unknown>;
@@ -81,6 +92,7 @@ function normalizeUserRow(raw: unknown): AdminUserRow | null {
 }
 
 function RoleBadge({ role }: { role: UserRole }) {
+  const t = useAppStore((s) => s.t);
   const styles: Record<UserRole, string> = {
     user: "border-neutral-200 bg-neutral-50 text-neutral-600",
     staff: "border-amber-200 bg-amber-50 text-amber-700",
@@ -88,28 +100,36 @@ function RoleBadge({ role }: { role: UserRole }) {
     super_admin: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700",
   };
   const labels: Record<UserRole, string> = {
-    user: "User",
-    staff: "Staff",
-    admin: "Admin",
-    super_admin: "Super Admin",
+    user: "ad.role.user",
+    staff: "ad.role.staff",
+    admin: "ad.role.admin",
+    super_admin: "ad.role.superAdmin",
   };
   return (
     <Badge variant="outline" className={cn("font-bold", styles[role])}>
       {role === "super_admin" && (
         <QTBIcon name="crown" size={11} className="mr-1 text-fuchsia-500" />
       )}
-      {labels[role]}
+      {t(labels[role])}
     </Badge>
   );
 }
 
 function SubBadge({ status }: { status: string }) {
+  const t = useAppStore((s) => s.t);
   const s = status === "active" || status === "trial" || status === "expired";
   const cls = {
     active: "border-emerald-200 bg-emerald-50 text-emerald-700",
     trial: "border-amber-200 bg-amber-50 text-amber-700",
     expired: "border-rose-200 bg-rose-50 text-rose-700",
   } as Record<string, string>;
+  const labelKey: Record<string, string> = {
+    active: "ad.staff.subActive",
+    trial: "ad.staff.subTrial",
+    expired: "ad.staff.subExpired",
+    none: "ad.staff.subNone",
+    pending: "ad.staff.subPending",
+  };
   return (
     <Badge
       variant="outline"
@@ -118,7 +138,7 @@ function SubBadge({ status }: { status: string }) {
         s ? cls[status] : "border-neutral-200 bg-neutral-50 text-neutral-500"
       )}
     >
-      {status}
+      {labelKey[status] ? t(labelKey[status]) : status}
     </Badge>
   );
 }
@@ -130,6 +150,7 @@ function SubBadge({ status }: { status: string }) {
 export default function AdminStaffView() {
   const caller = useAppStore((s) => s.user);
   const toast = useQtbToast();
+  const t = useAppStore((s) => s.t);
   const callerIsSuper = isSuperAdmin(caller);
 
   const [query, setQuery] = useState("");
@@ -153,7 +174,7 @@ export default function AdminStaffView() {
       })
       .catch((err) => {
         setUsers([]);
-        toast.error(err, "Couldn't load users");
+        toast.error(err, t("ad.staff.loadFailed"));
       });
   };
 
@@ -192,9 +213,9 @@ export default function AdminStaffView() {
       setUsers((list) =>
         list ? list.map((u) => (u.id === row.id && updated ? updated : u)) : list
       );
-      toast.success("Role updated", `${row.email} is now ${role === "super_admin" ? "a super admin" : role}.`);
+      toast.success(t("ad.staff.roleUpdated"), t("ad.staff.roleNow", { email: row.email, role: t(roleKey(role)) }));
     } catch (err) {
-      toast.error(err, "Role change failed");
+      toast.error(err, t("ad.staff.roleFailed"));
     } finally {
       setRowBusy(null);
     }
@@ -213,11 +234,11 @@ export default function AdminStaffView() {
         list ? list.map((u) => (u.id === row.id && updated ? updated : u)) : list
       );
       toast.success(
-        banned ? "User banned" : "User unbanned",
-        `${row.email} ${banned ? "can no longer sign in." : "can sign in again."}`
+        banned ? t("ad.staff.bannedTitle") : t("ad.staff.unbannedTitle"),
+        banned ? t("ad.staff.bannedSub", { email: row.email }) : t("ad.staff.unbannedSub", { email: row.email })
       );
     } catch (err) {
-      toast.error(err, "Ban action failed");
+      toast.error(err, t("ad.staff.banFailed"));
     } finally {
       setRowBusy(null);
       setBanTarget(null);
@@ -243,14 +264,14 @@ export default function AdminStaffView() {
           <SelectTrigger
             size="sm"
             className="h-9 w-[132px] text-xs font-semibold"
-            aria-label={`Role for ${row.email}`}
+            aria-label={t("ad.staff.roleAria", { email: row.email })}
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {roleOptions.map((r) => (
               <SelectItem key={r} value={r} className="text-xs">
-                {r === "super_admin" ? "Super Admin" : r.charAt(0).toUpperCase() + r.slice(1)}
+                {t(roleKey(r))}
               </SelectItem>
             ))}
           </SelectContent>
@@ -263,7 +284,7 @@ export default function AdminStaffView() {
               if (active) setUnbanTarget(row);
               else setBanTarget(row);
             }}
-            aria-label={row.banned ? "Unban user" : "Ban user"}
+            aria-label={row.banned ? t("ad.staff.unbanAria") : t("ad.staff.banAria")}
           />
           <span
             className={cn(
@@ -271,7 +292,7 @@ export default function AdminStaffView() {
               row.banned ? "text-rose-500" : "text-neutral-400"
             )}
           >
-            {row.banned ? "Banned" : "Active"}
+            {row.banned ? t("ad.staff.banned") : t("ad.staff.active")}
           </span>
         </div>
       </div>
@@ -291,9 +312,9 @@ export default function AdminStaffView() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name or email…"
+            placeholder={t("ad.staff.searchPh")}
             className="pl-9"
-            aria-label="Search users"
+            aria-label={t("ad.staff.searchAria")}
           />
         </div>
         <QTBButton
@@ -303,7 +324,7 @@ export default function AdminStaffView() {
           loading={users === null}
           onClick={() => void fetchUsers(query)}
         >
-          <QTBIcon name="refresh" size={14} /> Search
+          <QTBIcon name="refresh" size={14} /> {t("ad.staff.search")}
         </QTBButton>
         <QTBButton
           size="sm"
@@ -314,7 +335,7 @@ export default function AdminStaffView() {
             window.location.href = `/api/admin/users?format=csv${qs}`;
           }}
         >
-          <QTBIcon name="download" size={14} /> Export CSV
+          <QTBIcon name="download" size={14} /> {t("ad.staff.exportCsv")}
         </QTBButton>
       </div>
 
@@ -334,8 +355,8 @@ export default function AdminStaffView() {
         <div className="rounded-2xl border border-neutral-200 bg-white">
           <EmptyState
             icon="users"
-            title="No users found"
-            description={query ? `Nothing matches “${query}”.` : "No members have registered yet."}
+            title={t("ad.staff.emptyTitle")}
+            description={query ? t("ad.staff.emptyQuery", { query }) : t("ad.staff.emptyNone")}
           />
         </div>
       )}
@@ -347,11 +368,11 @@ export default function AdminStaffView() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-neutral-50/80 hover:bg-neutral-50/80">
-                  <TableHead className="pl-5">Member</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Joined</TableHead>
-                  <TableHead className="pr-5 text-right">Access</TableHead>
+                  <TableHead className="pl-5">{t("ad.staff.thMember")}</TableHead>
+                  <TableHead>{t("ad.staff.thRole")}</TableHead>
+                  <TableHead>{t("ad.staff.thStatus")}</TableHead>
+                  <TableHead>{t("ad.staff.thJoined")}</TableHead>
+                  <TableHead className="pr-5 text-start">{t("ad.staff.thAccess")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -359,7 +380,7 @@ export default function AdminStaffView() {
                   <TableRow key={row.id} className={cn(row.id === caller?.id && "bg-fuchsia-50/40")}>
                     <TableCell className="max-w-56 pl-5">
                       <p className="truncate text-sm font-bold text-neutral-900">
-                        {row.name || "—"} {row.id === caller?.id && <span className="text-xs font-semibold text-fuchsia-500">(you)</span>}
+                        {row.name || "—"} {row.id === caller?.id && <span className="text-xs font-semibold text-fuchsia-500">{t("ad.staff.you")}</span>}
                       </p>
                       <p className="truncate text-xs text-neutral-400">{row.email}</p>
                     </TableCell>
@@ -371,7 +392,7 @@ export default function AdminStaffView() {
                         <SubBadge status={row.subscriptionStatus} />
                         {row.banned && (
                           <Badge variant="outline" className="border-rose-300 bg-rose-100 font-bold text-rose-700">
-                            Banned
+                            {t("ad.staff.banned")}
                           </Badge>
                         )}
                       </div>
@@ -399,7 +420,7 @@ export default function AdminStaffView() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-neutral-900">
-                      {row.name || "—"} {row.id === caller?.id && <span className="text-xs font-semibold text-fuchsia-500">(you)</span>}
+                      {row.name || "—"} {row.id === caller?.id && <span className="text-xs font-semibold text-fuchsia-500">{t("ad.staff.you")}</span>}
                     </p>
                     <p className="truncate text-xs text-neutral-400">{row.email}</p>
                   </div>
@@ -407,14 +428,14 @@ export default function AdminStaffView() {
                     <RoleBadge role={row.role} />
                     {row.banned && (
                       <Badge variant="outline" className="border-rose-300 bg-rose-100 font-bold text-rose-700">
-                        Banned
+                        {t("ad.staff.banned")}
                       </Badge>
                     )}
                   </div>
                 </div>
                 <div className="mt-2 flex items-center gap-2 text-xs text-neutral-400">
                   <SubBadge status={row.subscriptionStatus} />
-                  <span>· Joined {format(new Date(row.createdAt), "MMM d, yyyy")}</span>
+                  <span>· {t("ad.staff.joinedOn", { date: format(new Date(row.createdAt), "MMM d, yyyy") })}</span>
                 </div>
                 <div className="mt-3 border-t border-neutral-100 pt-3">
                   {renderRowActions(row)}
@@ -427,26 +448,25 @@ export default function AdminStaffView() {
 
       <p className="flex items-center gap-2 text-xs text-neutral-400">
         <GradientChip icon="shield" tone="neutral" size="sm" className="!h-6 !w-6 [&>svg]:size-3" />
-        Your own row is locked. Only a super admin can manage other super admins.
+        {t("ad.staff.lockNote")}
       </p>
 
       {/* Ban confirm */}
       <AlertDialog open={banTarget !== null} onOpenChange={(open) => !open && setBanTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Ban this member?</AlertDialogTitle>
+            <AlertDialogTitle>{t("ad.staff.banTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {banTarget?.email} will be signed out immediately and won&apos;t be able to
-              log in until unbanned. Their data is kept.
+              {banTarget ? t("ad.staff.banDesc", { email: banTarget.email }) : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-rose-600 text-white hover:bg-rose-700"
               onClick={() => banTarget && void setBanned(banTarget, true)}
             >
-              Ban User
+              {t("ad.staff.banAction")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -456,18 +476,18 @@ export default function AdminStaffView() {
       <AlertDialog open={unbanTarget !== null} onOpenChange={(open) => !open && setUnbanTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Restore access?</AlertDialogTitle>
+            <AlertDialogTitle>{t("ad.staff.unbanTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {unbanTarget?.email} will be able to sign in again right away.
+              {unbanTarget ? t("ad.staff.unbanDesc", { email: unbanTarget.email }) : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-emerald-600 text-white hover:bg-emerald-700"
               onClick={() => unbanTarget && void setBanned(unbanTarget, false)}
             >
-              Unban
+              {t("ad.staff.unbanAction")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

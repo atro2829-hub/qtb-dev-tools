@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { badRequest, getFormString } from '@/lib/server/api-utils'
 import { detectFormat, extractText } from '@/lib/server/text-extraction'
 import { textToDocxBuffer } from '@/lib/server/docx-generation'
+import { startRun, type RunHandle } from '@/lib/server/progress'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -61,12 +62,14 @@ export async function POST(request: Request) {
 
   let jobFileName = ''
   let jobDetail = ''
+  let rh: RunHandle | null = null
 
   try {
     const form = await request.formData()
     const file = form.get('file')
     const sourceLang = getFormString(form, 'sourceLang') || 'auto'
     const targetLang = getFormString(form, 'targetLang')
+    const runKey = getFormString(form, 'run').slice(0, 80)
     const extractedTextRaw = form.get('extractedText')
     const clientExtractedText =
       typeof extractedTextRaw === 'string'
@@ -107,6 +110,16 @@ export async function POST(request: Request) {
       rawText = await extractText(buffer, source)
     }
     const truncated = rawText.slice(0, MAX_TRANSLATION_CHARS)
+
+    rh = await startRun({
+      userId: session.id,
+      runKey,
+      toolType: 'translate',
+      fileName,
+      sourceFormat: source,
+      targetFormat: 'docx',
+    })
+    rh?.step(20, 'translating')
 
     let translated = ''
 
@@ -157,17 +170,21 @@ export async function POST(request: Request) {
     const langPart = sanitizeFileNamePart(targetLang)
     const outFileName = `${base}.${langPart}.docx`
 
-    await db.toolJob.create({
-      data: {
-        userId: session.id,
-        toolType: 'translate',
-        fileName,
-        sourceFormat: source,
-        targetFormat: 'docx',
-        status: 'completed',
-        detail: jobDetail,
-      },
-    })
+    if (rh) {
+      await rh.finish(jobDetail)
+    } else {
+      await db.toolJob.create({
+        data: {
+          userId: session.id,
+          toolType: 'translate',
+          fileName,
+          sourceFormat: source,
+          targetFormat: 'docx',
+          status: 'completed',
+          detail: jobDetail,
+        },
+      })
+    }
 
     return Response.json({
       fileName: outFileName,
@@ -177,7 +194,9 @@ export async function POST(request: Request) {
     })
   } catch (err) {
     console.error('[tools/translate]', err)
-    if (session) {
+    if (rh) {
+      await rh.fail(err instanceof Error ? err.message.slice(0, 500) : 'Unknown error')
+    } else if (session) {
       await db.toolJob
         .create({
           data: {

@@ -3,6 +3,7 @@ import { enforceQuota } from '@/lib/server/quota'
 import { db } from '@/lib/db'
 import { PDFDocument } from 'pdf-lib'
 import { badRequest, serverError } from '@/lib/server/api-utils'
+import { startRun, type RunHandle } from '@/lib/server/progress'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -57,10 +58,13 @@ export async function POST(req: Request) {
   const denied = await enforceQuota(user)
   if (denied) return denied
 
+  let rh: RunHandle | null = null
+
   try {
     const form = await req.formData()
     const file = form.get('file')
     const pages = String(form.get('pages') || '')
+    const runKey = typeof form.get('run') === 'string' ? (form.get('run') as string).trim().slice(0, 80) : ''
     if (!(file instanceof File)) return badRequest('Please upload a PDF file.')
     if (!file.name.toLowerCase().endsWith('.pdf')) {
       return badRequest('Only .pdf files are supported.')
@@ -74,6 +78,16 @@ export async function POST(req: Request) {
 
     const indices = parsePageRanges(pages, total)
 
+    rh = await startRun({
+      userId: user.id,
+      runKey,
+      toolType: 'pdf-split',
+      fileName: file.name,
+      sourceFormat: 'pdf',
+      targetFormat: 'pdf',
+    })
+    rh?.step(35, 'processing')
+
     const out = await PDFDocument.create()
     out.setTitle('Split with QTB DEV TOOLS')
     out.setProducer('QTB DEV TOOLS')
@@ -84,17 +98,21 @@ export async function POST(req: Request) {
     const baseName = file.name.replace(/\.pdf$/i, '')
     const fileName = `${baseName}-pages-${indices.length}.pdf`
 
-    await db.toolJob.create({
-      data: {
-        userId: user.id,
-        toolType: 'pdf-split',
-        fileName: file.name,
-        sourceFormat: 'pdf',
-        targetFormat: 'pdf',
-        status: 'completed',
-        detail: `pages [${pages}] → ${indices.length}/${total} pages`,
-      },
-    })
+    if (rh) {
+      await rh.finish(`pages [${pages}] → ${indices.length}/${total} pages`)
+    } else {
+      await db.toolJob.create({
+        data: {
+          userId: user.id,
+          toolType: 'pdf-split',
+          fileName: file.name,
+          sourceFormat: 'pdf',
+          targetFormat: 'pdf',
+          status: 'completed',
+          detail: `pages [${pages}] → ${indices.length}/${total} pages`,
+        },
+      })
+    }
 
     return Response.json({
       fileName,
@@ -107,16 +125,20 @@ export async function POST(req: Request) {
     const isUserError = /out of range|valid page|No pages|not a PDF|exceeds|nothing to split/.test(message)
     if (!isUserError) {
       console.error('[pdf-split] failed:', err)
-      await db.toolJob
-        .create({
-          data: {
-            userId: user.id,
-            toolType: 'pdf-split',
-            status: 'failed',
-            detail: message.slice(0, 300),
-          },
-        })
-        .catch(() => {})
+      if (rh) {
+        await rh.fail(message.slice(0, 300)).catch(() => {})
+      } else {
+        await db.toolJob
+          .create({
+            data: {
+              userId: user.id,
+              toolType: 'pdf-split',
+              status: 'failed',
+              detail: message.slice(0, 300),
+            },
+          })
+          .catch(() => {})
+      }
       return serverError('Split failed. The file may be corrupted or password-protected.')
     }
     return badRequest(message)

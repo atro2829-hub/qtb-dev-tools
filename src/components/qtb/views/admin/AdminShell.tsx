@@ -12,6 +12,13 @@ interface AdminNavItem {
   labelKey: string;
 }
 
+const ROLE_LABEL_KEY: Record<string, string> = {
+  user: "ad.role.user",
+  staff: "ad.role.staff",
+  admin: "ad.role.admin",
+  super_admin: "ad.role.superAdmin",
+};
+
 const ADMIN_NAV: AdminNavItem[] = [
   { view: "admin-settings", icon: "settings", labelKey: "admin.settings" },
   { view: "admin-monetization", icon: "wallet", labelKey: "admin.monetization" },
@@ -24,6 +31,7 @@ const ADMIN_NAV: AdminNavItem[] = [
 
 function RoleBadge() {
   const user = useAppStore((s) => s.user);
+  const t = useAppStore((s) => s.t);
   const superAdmin = isSuperAdmin(user);
   const role = user?.role ?? "admin";
   return (
@@ -36,7 +44,7 @@ function RoleBadge() {
       )}
     >
       <span className="size-1.5 rounded-full" />
-      {superAdmin ? "Super Admin" : role}
+      {superAdmin ? t("ad.role.superAdmin") : (ROLE_LABEL_KEY[role] ? t(ROLE_LABEL_KEY[role]) : role)}
     </span>
   );
 }
@@ -108,7 +116,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
 
       {/* Mobile tab bar */}
       <nav
-        aria-label="Admin sections"
+        aria-label={t("ad.nav.sections")}
         className="qtb-scroll mt-5 flex gap-2 overflow-x-auto pb-1 md:hidden"
       >
         {ADMIN_NAV.map((item) => {
@@ -144,7 +152,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
             <p className="px-2 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-400">
               {t("admin.management")}
             </p>
-            <nav aria-label="Admin sections" className="space-y-1">
+            <nav aria-label={t("ad.nav.sections")} className="space-y-1">
               {ADMIN_NAV.map((item) => (
                 <NavButton
                   key={item.view}

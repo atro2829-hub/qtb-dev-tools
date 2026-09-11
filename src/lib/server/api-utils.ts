@@ -1,4 +1,10 @@
-import type { BankAccount, Notification, SiteConfig, SubscriptionRequest, ToolJob } from '@prisma/client'
+import type {
+  BankAccount,
+  Notification,
+  SiteConfig,
+  SubscriptionRequest,
+  ToolJob,
+} from '@/generated/prisma/client'
 
 /* ------------------------------------------------------------------ */
 /* Config serialization                                                */
@@ -34,6 +40,8 @@ export interface FullConfig extends PublicConfig {
   admobBannerId: string
   adsenseClientId: string
   adsenseSlotId: string
+  supabaseUrl: string
+  supabaseServiceKey: string
   freeTrialDays: number
   updatedAt: string
 }
@@ -48,6 +56,8 @@ export function toFullConfig(cfg: SiteConfig | null): FullConfig {
     admobBannerId: cfg?.admobBannerId ?? '',
     adsenseClientId: cfg?.adsenseClientId ?? '',
     adsenseSlotId: cfg?.adsenseSlotId ?? '',
+    supabaseUrl: cfg?.supabaseUrl ?? '',
+    supabaseServiceKey: cfg?.supabaseServiceKey ?? '',
     freeTrialDays: cfg?.freeTrialDays ?? 365,
     updatedAt: (cfg?.updatedAt ?? new Date()).toISOString(),
   }
@@ -102,6 +112,9 @@ export function toToolJobJson(j: ToolJob): Record<string, unknown> {
     targetFormat: j.targetFormat,
     status: j.status,
     detail: j.detail,
+    progress: j.progress,
+    stage: j.stage,
+    resultUrl: j.resultUrl,
     createdAt: j.createdAt.toISOString(),
   }
 }

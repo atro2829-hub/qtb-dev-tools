@@ -33,6 +33,8 @@ CREATE TABLE "SiteConfig" (
     "freeTrialDays" INTEGER NOT NULL DEFAULT 365,
     "freeDailyLimit" INTEGER NOT NULL DEFAULT 5,
     "announcement" TEXT NOT NULL DEFAULT '',
+    "supabaseUrl" TEXT NOT NULL DEFAULT '',
+    "supabaseServiceKey" TEXT NOT NULL DEFAULT '',
     "updatedAt" DATETIME NOT NULL
 );
 
@@ -100,6 +102,10 @@ CREATE TABLE "ToolJob" (
     "targetFormat" TEXT NOT NULL DEFAULT '',
     "status" TEXT NOT NULL DEFAULT 'completed',
     "detail" TEXT NOT NULL DEFAULT '',
+    "runKey" TEXT NOT NULL DEFAULT '',
+    "progress" INTEGER NOT NULL DEFAULT 0,
+    "stage" TEXT NOT NULL DEFAULT '',
+    "resultUrl" TEXT NOT NULL DEFAULT '',
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ToolJob_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );

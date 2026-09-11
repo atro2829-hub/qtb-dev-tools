@@ -45,6 +45,8 @@ model SiteConfig {
   freeTrialDays    Int      @default(365)
   freeDailyLimit   Int      @default(5)
   announcement     String   @default("")
+  supabaseUrl        String @default("")
+  supabaseServiceKey String @default("")
   updatedAt        DateTime @updatedAt
 }
 
@@ -109,7 +111,13 @@ model ToolJob {
   fileName     String   @default("")
   sourceFormat String   @default("")
   targetFormat String   @default("")
-  status       String   @default("completed") // completed | failed
+  status       String   @default("completed") // processing | completed | failed
   detail       String   @default("")
+  runKey       String   @default("") // client-generated id for live progress polling
+  progress     Int      @default(0) // 0-100 real server-side milestone progress
+  stage        String   @default("") // queued | transcribing | organizing | building | saving
+  resultUrl    String   @default("") // cloud permalink (Supabase Storage) when archived
   createdAt    DateTime @default(now())
+
+  @@index([runKey])
 }
