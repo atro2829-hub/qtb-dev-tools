@@ -11,9 +11,11 @@ export async function POST() {
     if (!admin) return forbidden('Admin access required')
 
     const result = await sbTestConnection()
-    return Response.json(result, { status: result.ok ? 200 : 400 })
+    // Always 200 — the client renders { ok, message } directly so the admin
+    // sees the REAL failure reason instead of a generic status-code error.
+    return Response.json(result)
   } catch (err) {
     console.error('[admin/supabase-test/POST]', err)
-    return Response.json({ ok: false, message: 'Test failed' }, { status: 500 })
+    return Response.json({ ok: false, message: 'Test failed — unexpected server error' })
   }
 }
